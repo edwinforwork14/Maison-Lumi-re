@@ -1,0 +1,367 @@
+import { useState } from 'react'
+import {
+  createFileRoute,
+  useSearch,
+  useNavigate,
+} from '@tanstack/react-router'
+import {
+  queryProducts,
+  categories,
+  collections,
+  allColors,
+  allMaterials,
+  sortProducts,
+  type SortId,
+} from '@/data'
+import { ProductGrid } from '@/components/product/ProductGrid'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { categoryMap } from '@/data/categories'
+
+interface ShopSearch {
+  category?: string
+  collection?: string
+  color?: string[]
+  material?: string[]
+  priceMin?: number
+  priceMax?: number
+  sort?: SortId
+}
+
+export const Route = createFileRoute('/shop')({
+  validateSearch: (search: Record<string, unknown>): ShopSearch => ({
+    category: typeof search.category === 'string' ? search.category : undefined,
+    collection:
+      typeof search.collection === 'string' ? search.collection : undefined,
+    color: Array.isArray(search.color)
+      ? (search.color as string[])
+      : typeof search.color === 'string'
+        ? [search.color]
+        : undefined,
+    material: Array.isArray(search.material)
+      ? (search.material as string[])
+      : typeof search.material === 'string'
+        ? [search.material]
+        : undefined,
+    priceMin:
+      typeof search.priceMin === 'string'
+        ? Number(search.priceMin)
+        : typeof search.priceMin === 'number'
+          ? search.priceMin
+          : undefined,
+    priceMax:
+      typeof search.priceMax === 'string'
+        ? Number(search.priceMax)
+        : typeof search.priceMax === 'number'
+          ? search.priceMax
+          : undefined,
+    sort: typeof search.sort === 'string' ? (search.sort as SortId) : undefined,
+  }),
+  head: () => ({
+    meta: [
+      { title: 'Tienda — Maison Lumière' },
+      {
+        name: 'description',
+        content: 'Catálogo completo de Maison Lumière: gafas, bolsos, zapatos y accesorios.',
+      },
+    ],
+  }),
+  component: ShopPage,
+})
+
+const sorts: { id: SortId; label: string }[] = [
+  { id: 'recommended', label: 'Recomendados' },
+  { id: 'price-asc', label: 'Precio: menor a mayor' },
+  { id: 'price-desc', label: 'Precio: mayor a menor' },
+  { id: 'bestsellers', label: 'Más vendidos' },
+  { id: 'new', label: 'Nuevos' },
+]
+
+function ShopPage() {
+  const search = useSearch({ from: '/shop' })
+  const navigate = useNavigate()
+  const [filtersOpen, setFiltersOpen] = useState(false)
+
+  const category = categoryMap.get(search.category as never)
+  const collection = collections.find((c) => c.id === search.collection)
+
+  const products = sortProducts(
+    queryProducts({
+      category: search.category as never,
+      collection: search.collection as never,
+      colors: search.color,
+      materials: search.material,
+      priceMin: search.priceMin,
+      priceMax: search.priceMax,
+      sort: search.sort,
+    }),
+  )
+
+  const setParam = (updates: Partial<ShopSearch>) => {
+    navigate({
+      to: '/shop',
+      search: (prev: ShopSearch) => ({ ...prev, ...updates }),
+    })
+  }
+
+  const toggleArrayParam = (
+    key: 'color' | 'material',
+    value: string,
+  ) => {
+    const current = search[key] ?? []
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value]
+    setParam({ [key]: next.length ? next : undefined } as Partial<ShopSearch>)
+  }
+
+  const activeFilterCount =
+    (search.color?.length ?? 0) +
+    (search.material?.length ?? 0) +
+    (search.collection ? 1 : 0) +
+    (search.sort ? 1 : 0)
+
+  const title = category?.name ?? collection?.name ?? 'Todo el catálogo'
+  const editorial = category?.editorial ?? collection?.description
+
+  const filterPanel = (
+    <div className="space-y-8">
+      <FilterGroup title="Categoría">
+        <ul className="space-y-2.5">
+          <li>
+            <button
+              type="button"
+              onClick={() => setParam({ category: undefined })}
+              className={`text-sm transition-colors hover:text-taupe ${
+                !search.category ? 'underline underline-offset-4' : ''
+              }`}
+            >
+              Todo el catálogo
+            </button>
+          </li>
+          {categories.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => setParam({ category: c.id })}
+                className={`text-sm transition-colors hover:text-taupe ${
+                  search.category === c.id ? 'underline underline-offset-4' : ''
+                }`}
+              >
+                {c.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </FilterGroup>
+
+      <FilterGroup title="Colección">
+        <ul className="space-y-2.5">
+          {collections.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() =>
+                  setParam({
+                    collection: search.collection === c.id ? undefined : c.id,
+                  })
+                }
+                className={`text-sm transition-colors hover:text-taupe ${
+                  search.collection === c.id
+                    ? 'underline underline-offset-4'
+                    : ''
+                }`}
+              >
+                {c.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </FilterGroup>
+
+      <FilterGroup title="Color">
+        <ul className="space-y-2.5">
+          {allColors.map((c) => (
+            <li key={c}>
+              <label className="flex cursor-pointer items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={(search.color ?? []).includes(c)}
+                  onChange={() => toggleArrayParam('color', c)}
+                  className="h-3.5 w-3.5 appearance-none border border-clay checked:bg-ink"
+                />
+                {c}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </FilterGroup>
+
+      <FilterGroup title="Material">
+        <ul className="space-y-2.5">
+          {allMaterials.map((m) => (
+            <li key={m}>
+              <label className="flex cursor-pointer items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={(search.material ?? []).includes(m)}
+                  onChange={() => toggleArrayParam('material', m)}
+                  className="h-3.5 w-3.5 appearance-none border border-clay checked:bg-ink"
+                />
+                {m}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </FilterGroup>
+
+      <FilterGroup title="Precio">
+        <ul className="space-y-2.5">
+          {[
+            { label: 'Hasta 300 €', priceMin: undefined, priceMax: 300 },
+            { label: '300 – 600 €', priceMin: 300, priceMax: 600 },
+            { label: '600 – 1.000 €', priceMin: 600, priceMax: 1000 },
+            { label: 'Más de 1.000 €', priceMin: 1000, priceMax: undefined },
+          ].map((r) => (
+            <li key={r.label}>
+              <button
+                type="button"
+                onClick={() =>
+                  setParam({
+                    category: search.category,
+                    collection: search.collection,
+                    color: search.color,
+                    material: search.material,
+                    sort: search.sort,
+                    priceMin: r.priceMin,
+                    priceMax: r.priceMax,
+                  })
+                }
+                className="text-sm text-taupe hover:text-ink"
+              >
+                {r.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </FilterGroup>
+    </div>
+  )
+
+  return (
+    <div className="animate-fade-in">
+      {/* Encabezado editorial */}
+      <header className="border-b border-linen bg-sand px-4 py-14 md:px-8 md:py-20">
+        <div className="mx-auto max-w-7xl">
+          <p className="mb-2 text-[11px] uppercase tracking-[0.3em] text-taupe">
+            Tienda
+          </p>
+          <h1 className="mb-3 font-serif text-4xl font-light md:text-5xl">
+            {title}
+          </h1>
+          {editorial && (
+            <p className="max-w-xl text-sm leading-relaxed text-taupe">
+              {editorial}
+            </p>
+          )}
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-7xl px-4 py-10 md:px-8">
+        {/* Barra de controles */}
+        <div className="mb-10 flex flex-wrap items-center justify-between gap-4 border-b border-linen pb-4">
+          <div className="flex items-center gap-6">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((v) => !v)}
+              className="text-[11px] uppercase tracking-[0.2em] lg:hidden"
+            >
+              Filtros {activeFilterCount > 0 && `(${activeFilterCount})`}
+            </button>
+            <p className="text-sm text-taupe">
+              {products.length}{' '}
+              {products.length === 1 ? 'pieza' : 'piezas'}
+            </p>
+          </div>
+
+          <label className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em]">
+            <span className="text-taupe">Ordenar por</span>
+            <select
+              value={search.sort ?? 'recommended'}
+              onChange={(e) => setParam({ sort: e.target.value as SortId })}
+              className="border-none bg-transparent py-1 pr-2 text-[11px] uppercase tracking-[0.2em] outline-none"
+            >
+              {sorts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="flex gap-12">
+          {/* Filtros desktop */}
+          <aside className="hidden w-56 shrink-0 lg:block">
+            {filterPanel}
+          </aside>
+
+          {/* Filtros mobile colapsables */}
+          {filtersOpen && (
+            <aside className="fixed inset-0 z-50 overflow-y-auto bg-ivory p-6 lg:hidden">
+              <div className="mb-8 flex items-center justify-between">
+                <span className="text-xs uppercase tracking-[0.25em]">
+                  Filtros
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen(false)}
+                  className="text-xl text-taupe"
+                  aria-label="Cerrar filtros"
+                >
+                  ✕
+                </button>
+              </div>
+              {filterPanel}
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="mt-10 w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory"
+              >
+                Ver {products.length} piezas
+              </button>
+            </aside>
+          )}
+
+          {/* Grid */}
+          <div className="min-w-0 flex-1">
+            {products.length === 0 ? (
+              <EmptyState
+                title="Sin resultados"
+                message="Ninguna pieza coincide con los filtros seleccionados. Pruebe a eliminar algún filtro."
+              />
+            ) : (
+              <ProductGrid products={products} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FilterGroup({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <section>
+      <h3 className="mb-4 text-[11px] uppercase tracking-[0.25em] text-taupe">
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+}
