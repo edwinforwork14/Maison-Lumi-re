@@ -13,12 +13,17 @@ import { EmptyState } from '@/components/ui/EmptyState'
 interface ShopSearch {
   category?: string
   collection?: string
-  color?: string[]
-  material?: string[]
+  /** Escalar con un valor (URL canónica) o array JSON con varios. */
+  color?: string | string[]
+  material?: string | string[]
   priceMin?: number
   priceMax?: number
   sort?: SortId
 }
+
+/** Normaliza el valor de search (escalar o array) a lista. */
+const asArray = (v: string | string[] | undefined): string[] =>
+  v === undefined ? [] : Array.isArray(v) ? v : [v]
 
 export const Route = createFileRoute('/shop')({
   validateSearch: (search: Record<string, unknown>): ShopSearch => ({
@@ -28,12 +33,12 @@ export const Route = createFileRoute('/shop')({
     color: Array.isArray(search.color)
       ? (search.color as string[])
       : typeof search.color === 'string'
-        ? [search.color]
+        ? search.color
         : undefined,
     material: Array.isArray(search.material)
       ? (search.material as string[])
       : typeof search.material === 'string'
-        ? [search.material]
+        ? search.material
         : undefined,
     priceMin:
       typeof search.priceMin === 'string'
@@ -131,8 +136,8 @@ function ShopPage() {
         data: {
           category: search.category,
           collection: search.collection,
-          colors: search.color,
-          materials: search.material,
+          colors: asArray(search.color),
+          materials: asArray(search.material),
           priceMin: search.priceMin,
           priceMax: search.priceMax,
           sort: search.sort,
@@ -159,16 +164,17 @@ function ShopPage() {
     key: 'color' | 'material',
     value: string,
   ) => {
-    const current = search[key] ?? []
+    const current = asArray(search[key])
     const next = current.includes(value)
       ? current.filter((v) => v !== value)
       : [...current, value]
-    setParam({ [key]: next.length ? next : undefined } as Partial<ShopSearch>)
+    // Un solo valor viaja como escalar para URLs canónicas; varios como array.
+    setParam({ [key]: next.length === 1 ? next[0] : next } as Partial<ShopSearch>)
   }
 
   const activeFilterCount =
-    (search.color?.length ?? 0) +
-    (search.material?.length ?? 0) +
+    asArray(search.color).length +
+    asArray(search.material).length +
     (search.collection ? 1 : 0) +
     (search.sort ? 1 : 0)
 
@@ -237,7 +243,7 @@ function ShopPage() {
               <label className="flex cursor-pointer items-center gap-3 text-sm">
                 <input
                   type="checkbox"
-                  checked={(search.color ?? []).includes(c)}
+                  checked={asArray(search.color).includes(c)}
                   onChange={() => toggleArrayParam('color', c)}
                   className="h-3.5 w-3.5 appearance-none border border-clay checked:bg-ink"
                 />
@@ -255,7 +261,7 @@ function ShopPage() {
               <label className="flex cursor-pointer items-center gap-3 text-sm">
                 <input
                   type="checkbox"
-                  checked={(search.material ?? []).includes(m)}
+                  checked={asArray(search.material).includes(m)}
                   onChange={() => toggleArrayParam('material', m)}
                   className="h-3.5 w-3.5 appearance-none border border-clay checked:bg-ink"
                 />

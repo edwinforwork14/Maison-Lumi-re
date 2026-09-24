@@ -5,14 +5,16 @@
   --font-sans: "Jost", "Century Gothic", "Futura", system-ui, sans-serif;
   --font-serif: "Cormorant Garamond", "Didot", "Playfair Display", serif;
 
+  /* Textos secundarios oscurecidos para contraste AA sobre ivory/sand
+     (auditoría axe: color-contrast). Mantienen el tono cálido de marca. */
   --color-ivory: #faf8f4;
   --color-sand: #f1ece3;
   --color-linen: #e7e0d3;
-  --color-clay: #b3a48e;
-  --color-taupe: #8a7c68;
+  --color-clay: #7d6c58;
+  --color-taupe: #6e6151;
   --color-charcoal: #2b2724;
   --color-ink: #1a1815;
-  --color-gold: #a08860;
+  --color-gold: #7d6a4b;
 
   --animate-fade-in: fade-in 0.6s ease both;
   --animate-fade-up: fade-up 0.7s ease both;

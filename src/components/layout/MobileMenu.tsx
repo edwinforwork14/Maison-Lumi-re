@@ -70,6 +70,7 @@ export function MobileMenu({ open, onClose }: MobileMenuProps) {
         role="dialog"
         aria-modal={open}
         aria-label="Menú de navegación"
+        inert={!open}
         className={`absolute left-0 top-0 h-full w-[85%] max-w-sm overflow-y-auto bg-ivory transition-transform duration-500 ease-out ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}

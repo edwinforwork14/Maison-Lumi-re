@@ -100,7 +100,7 @@ function Home() {
       <section className="bg-charcoal text-ivory">
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 md:grid-cols-2 md:px-8 md:py-28">
           <div>
-            <p className="mb-4 text-[11px] uppercase tracking-[0.3em] text-clay">
+            <p className="mb-4 text-[11px] uppercase tracking-[0.3em] text-sand">
               El atelier
             </p>
             <h2 className="mb-6 font-serif text-3xl font-light leading-snug md:text-5xl">

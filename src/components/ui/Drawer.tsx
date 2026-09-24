@@ -67,12 +67,13 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
           open ? 'opacity-100' : 'opacity-0'
         }`}
       />
-      {/* Panel */}
+      {/* Panel — inert cuando está cerrado: sin foco accesible (axe: aria-hidden-focus) */}
       <aside
         ref={panelRef}
         role="dialog"
         aria-modal={open}
         aria-label={title}
+        inert={!open}
         className={`absolute right-0 top-0 h-full w-full max-w-md bg-ivory shadow-2xl transition-transform duration-500 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
