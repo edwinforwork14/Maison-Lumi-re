@@ -13,6 +13,7 @@
 import { pathToFileURL } from 'node:url'
 import { closeDb, createDbClient, requireDatabaseUrl, type Database } from '../client.ts'
 import { seedCatalog, type SeedOptions, type SeedSummary } from './catalog.ts'
+import { seedRbac } from './rbac.ts'
 
 export {
   DEV_ADMIN_EMAIL,
@@ -31,7 +32,11 @@ export async function seedDatabase(
   db: Database,
   options: SeedOptions = {},
 ): Promise<SeedSummary> {
-  return seedCatalog(db, options)
+  const summary = await seedCatalog(db, options)
+  // El catálogo de permisos y los cinco roles del Plan 02: sin esto el panel
+  // daría FORBIDDEN incluso al super administrador.
+  await seedRbac(db)
+  return summary
 }
 
 /** Resumen legible: una línea por tabla, siempre sin credenciales. */
