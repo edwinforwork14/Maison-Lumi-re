@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/* ─── Tokens de marca (conservados del brief original) ──────────────────── */
 @theme {
   --font-sans: "Jost", "Century Gothic", "Futura", system-ui, sans-serif;
   --font-serif: "Cormorant Garamond", "Didot", "Playfair Display", serif;
@@ -31,6 +32,31 @@
   }
 }
 
+/* Variante de navegación: abre el panel por hover Y foco (corrige D1). */
+@custom-variant group-nav (&:is(:where(.group-nav):is(:hover, :focus-within) *));
+
+/* ─── Utilidades de marca (corrige D10: fin de las cadenas repetidas) ───── */
+@utility eyebrow {
+  @apply text-[11px] uppercase tracking-[0.25em] text-taupe;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center uppercase tracking-[0.2em] transition-colors duration-300;
+}
+
+@utility btn-outline {
+  @apply border border-ink text-ink hover:bg-ink hover:text-ivory;
+}
+
+@utility field {
+  @apply w-full border border-linen bg-transparent px-4 py-3 text-sm outline-none placeholder:text-clay focus:border-ink;
+}
+
+@utility skeleton {
+  @apply animate-pulse bg-linen;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
 html {
   scroll-behavior: smooth;
 }
@@ -42,4 +68,30 @@ body {
 ::selection {
   background: var(--color-clay);
   color: white;
+}
+
+/* Accesibilidad: foco siempre visible en navegación por teclado. */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/* Accesibilidad: respetar la preferencia de movimiento reducido. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Skip-link: visible solo al recibir foco por teclado. */
+.skip-link {
+  @apply absolute left-4 top-4 z-[100] -translate-y-24 bg-ink px-6 py-3 text-[11px] uppercase tracking-[0.25em] text-ivory transition-transform;
+}
+.skip-link:focus {
+  transform: translateY(0);
 }

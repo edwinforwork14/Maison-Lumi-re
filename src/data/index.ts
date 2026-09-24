@@ -6,93 +6,49 @@ import {
   freeShippingThreshold,
   shippingCostFor,
 } from './shipping'
-import type {
-  CategoryId,
-  CollectionId,
-  Product,
-  ShippingMethodId,
-} from './types'
+import type { CategoryId, CollectionId, Product } from './types'
+import {
+  sortProducts,
+  queryProductsFrom,
+  type CatalogFilters,
+  type CatalogSource,
+} from '@/domain/catalog'
 
 export * from './types'
-export { categories, categoryMap, collections, collectionMap, shippingMethods, freeShippingThreshold, shippingCostFor }
+export {
+  categories,
+  categoryMap,
+  collections,
+  collectionMap,
+  shippingMethods,
+  freeShippingThreshold,
+  shippingCostFor,
+}
 
-export type SortId =
-  | 'recommended'
-  | 'price-asc'
-  | 'price-desc'
-  | 'bestsellers'
-  | 'new'
+export type { SortId } from '@/domain/catalog'
+export {
+  sortProducts,
+  queryProductsFrom,
+  type CatalogFilters,
+} from '@/domain/catalog'
 
 export const allColors = [...new Set(products.flatMap((p) => p.colors))].sort()
 export const allMaterials = [
   ...new Set(products.flatMap((p) => p.materials)),
 ].sort()
 
-export interface CatalogFilters {
-  category?: CategoryId
-  collection?: CollectionId
-  colors?: string[]
-  materials?: string[]
-  priceMin?: number
-  priceMax?: number
-  sort?: SortId
-  search?: string
+const catalogSource: CatalogSource = {
+  products,
+  collectionOf: (p) => (p as Product).collection,
 }
 
-export function sortProducts(list: Product[], sort: SortId = 'recommended') {
-  const sorted = [...list]
-  switch (sort) {
-    case 'price-asc':
-      return sorted.sort((a, b) => a.price - b.price)
-    case 'price-desc':
-      return sorted.sort((a, b) => b.price - a.price)
-    case 'bestsellers':
-      return sorted.sort((a, b) => Number(b.bestseller) - Number(a.bestseller))
-    case 'new':
-      return sorted.sort((a, b) => Number(b.isNew) - Number(a.isNew))
-    default:
-      return sorted.sort(
-        (a, b) =>
-          Number(b.featured) - Number(a.featured) ||
-          Number(b.bestseller) - Number(a.bestseller),
-      )
-  }
-}
-
+/**
+ * Fachada del catálogo: delega el filtrado y el ordenado en domain/catalog
+ * (una sola pasada de ordenado, defecto D3) y mantiene la API que consumen
+ * los componentes mientras dura la migración (plan.md §11, estrategia strangler).
+ */
 export function queryProducts(filters: CatalogFilters): Product[] {
-  let list = products
-
-  if (filters.category) {
-    list = list.filter((p) => p.category === filters.category)
-  }
-  if (filters.collection) {
-    list = list.filter((p) => p.collection === filters.collection)
-  }
-  if (filters.colors?.length) {
-    list = list.filter((p) => p.colors.some((c) => filters.colors!.includes(c)))
-  }
-  if (filters.materials?.length) {
-    list = list.filter((p) =>
-      p.materials.some((m) => filters.materials!.includes(m)),
-    )
-  }
-  if (filters.priceMin != null) {
-    list = list.filter((p) => p.price >= filters.priceMin!)
-  }
-  if (filters.priceMax != null) {
-    list = list.filter((p) => p.price <= filters.priceMax!)
-  }
-  if (filters.search) {
-    const q = filters.search.toLowerCase().trim()
-    list = list.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        p.category.includes(q),
-    )
-  }
-
-  return sortProducts(list, filters.sort)
+  return queryProductsFrom(catalogSource, filters) as Product[]
 }
 
 export function getProductBySlug(slug: string): Product | undefined {

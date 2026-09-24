@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 interface DrawerProps {
   open: boolean
@@ -7,17 +7,51 @@ interface DrawerProps {
   children: ReactNode
 }
 
+/**
+ * Drawer accesible (plan.md D9): role="dialog" + aria-modal, cierre con
+ * Escape, foco atrapado mientras está abierto y restauración del foco al
+ * elemento disparador al cerrar. El bloqueo de scroll se mantiene.
+ */
 export function Drawer({ open, onClose, title, children }: DrawerProps) {
+  const panelRef = useRef<HTMLElement | null>(null)
+  const triggerRef = useRef<Element | null>(null)
+
   useEffect(() => {
     if (!open) return
+    triggerRef.current = document.activeElement
+
+    const panel = panelRef.current
+    const focusables = panel?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )
+    focusables?.[0]?.focus()
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key === 'Tab' && focusables && focusables.length > 0) {
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        const active = document.activeElement
+        if (e.shiftKey && active === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
     }
+
     window.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     return () => {
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
+      const trigger = triggerRef.current
+      if (trigger instanceof HTMLElement) trigger.focus()
     }
   }, [open, onClose])
 
@@ -35,6 +69,10 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
       />
       {/* Panel */}
       <aside
+        ref={panelRef}
+        role="dialog"
+        aria-modal={open}
+        aria-label={title}
         className={`absolute right-0 top-0 h-full w-full max-w-md bg-ivory shadow-2xl transition-transform duration-500 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}

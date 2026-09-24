@@ -10,6 +10,7 @@ import {
 import { getProductById } from '../data/productLookup'
 import type { CartItem, CartTotals, Product, UserAccount } from '../data/types'
 import { shippingCostFor } from '../data/shipping'
+import { cartReducer, type CartLine } from '@/domain/cart'
 
 // ─── Persistencia ────────────────────────────────────────────────────────────
 
@@ -30,6 +31,12 @@ function save(key: string, value: unknown) {
     // almacenamiento no disponible (SSR / private mode): ignorar
   }
 }
+
+const toLines = (cart: readonly CartItem[]): CartLine[] =>
+  cart.map((i) => ({ productId: i.productId, color: i.color, quantity: i.quantity }))
+
+const toItems = (lines: readonly CartLine[]): CartItem[] =>
+  lines.map((l) => ({ productId: l.productId, color: l.color, quantity: l.quantity }))
 
 // ─── Carrito ─────────────────────────────────────────────────────────────────
 
@@ -97,27 +104,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .filter((l): l is NonNullable<typeof l> => l !== null)
 
     const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0)
+    // Regla única de envío (domain/pricing vía data/shipping). En Fase 2 el
+    // total pasará a ser autoritativo del servidor (quoteCart) y el cálculo
+    // cliente desaparecerá por completo (defecto D5).
+    const shipping = shippingCostFor('standard', subtotal)
     return {
       lines,
       subtotal,
-      shipping: shippingCostFor('standard', subtotal),
-      total: subtotal + shippingCostFor('standard', subtotal),
+      shipping,
+      total: subtotal + shipping,
     }
   }, [cart])
 
   const addToCart = useCallback(
     (product: Product, color: string, quantity = 1) => {
-      setCart((prev) => {
-        const idx = prev.findIndex(
-          (i) => i.productId === product.id && i.color === color,
-        )
-        if (idx >= 0) {
-          const next = [...prev]
-          next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity }
-          return next
-        }
-        return [...prev, { productId: product.id, color, quantity }]
-      })
+      setCart((prev) =>
+        toItems(
+          cartReducer(toLines(prev), {
+            type: 'add',
+            productId: product.id,
+            color,
+            quantity,
+          }),
+        ),
+      )
       setCartOpen(true)
     },
     [],
@@ -126,15 +136,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateQuantity = useCallback(
     (productId: string, color: string, quantity: number) => {
       setCart((prev) =>
-        quantity <= 0
-          ? prev.filter(
-              (i) => !(i.productId === productId && i.color === color),
-            )
-          : prev.map((i) =>
-              i.productId === productId && i.color === color
-                ? { ...i, quantity }
-                : i,
-            ),
+        toItems(
+          cartReducer(toLines(prev), {
+            type: 'setQuantity',
+            productId,
+            color,
+            quantity,
+          }),
+        ),
       )
     },
     [],
@@ -142,7 +151,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const removeFromCart = useCallback((productId: string, color: string) => {
     setCart((prev) =>
-      prev.filter((i) => !(i.productId === productId && i.color === color)),
+      toItems(cartReducer(toLines(prev), { type: 'remove', productId, color })),
     )
   }, [])
 

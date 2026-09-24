@@ -1,27 +1,26 @@
+import { Link, type LinkProps } from '@tanstack/react-router'
+
 interface SectionHeadingProps {
   eyebrow?: string
   title: string
-  action?: { label: string; to: string }
+  /** Enlace tipado (corrige D8: era <a href> sin verificación). */
+  action?: { label: string; linkProps: LinkProps }
 }
 
 export function SectionHeading({ eyebrow, title, action }: SectionHeadingProps) {
   return (
     <div className="mb-10 flex items-end justify-between gap-6">
       <div>
-        {eyebrow && (
-          <p className="mb-2 text-[11px] uppercase tracking-[0.3em] text-taupe">
-            {eyebrow}
-          </p>
-        )}
+        {eyebrow && <p className="eyebrow mb-2">{eyebrow}</p>}
         <h2 className="font-serif text-3xl font-light md:text-4xl">{title}</h2>
       </div>
       {action && (
-        <a
-          href={action.to}
+        <Link
+          {...action.linkProps}
           className="hidden shrink-0 text-[11px] uppercase tracking-[0.2em] underline-offset-4 hover:underline md:block"
         >
           {action.label} →
-        </a>
+        </Link>
       )}
     </div>
   )

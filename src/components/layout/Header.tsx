@@ -17,6 +17,9 @@ export function Header() {
       <header
         className="sticky top-0 z-40 border-b border-linen bg-ivory/95 backdrop-blur"
         onMouseLeave={() => setOpenNav(null)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpenNav(null)
+        }}
       >
         {/* Barra superior editorial */}
         <div className="hidden bg-sand px-8 py-2 text-center text-[10px] uppercase tracking-[0.25em] text-taupe md:block">
@@ -43,6 +46,8 @@ export function Header() {
                 <Link
                   to={section.to}
                   onMouseEnter={() => setOpenNav(section)}
+                  onFocus={() => setOpenNav(section)}
+                  aria-expanded={openNav?.label === section.label}
                   className={`py-2 text-[11px] uppercase tracking-[0.2em] transition-colors ${
                     openNav?.label === section.label
                       ? 'text-ink'

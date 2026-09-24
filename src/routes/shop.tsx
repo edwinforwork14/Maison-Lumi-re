@@ -1,21 +1,14 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   createFileRoute,
   useSearch,
   useNavigate,
 } from '@tanstack/react-router'
-import {
-  queryProducts,
-  categories,
-  collections,
-  allColors,
-  allMaterials,
-  sortProducts,
-  type SortId,
-} from '@/data'
+import { listProducts, listCategories, listCollections, listFacets } from '@/features/commerce.api'
+import type { SortId } from '@/domain/catalog'
 import { ProductGrid } from '@/components/product/ProductGrid'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { categoryMap } from '@/data/categories'
 
 interface ShopSearch {
   category?: string
@@ -65,8 +58,48 @@ export const Route = createFileRoute('/shop')({
       },
     ],
   }),
+  loader: async () => {
+    const [products, categories, collections, facets] = await Promise.all([
+      listProducts(),
+      listCategories(),
+      listCollections(),
+      listFacets(),
+    ])
+    return { products, categories, collections, facets }
+  },
+  // Estado de carga por ruta (defecto D19)
+  pendingComponent: ShopSkeleton,
   component: ShopPage,
 })
+
+function ShopSkeleton() {
+  return (
+    <div>
+      <header className="border-b border-linen bg-sand px-4 py-14 md:px-8 md:py-20">
+        <div className="mx-auto max-w-7xl space-y-4">
+          <div className="skeleton h-4 w-24" />
+          <div className="skeleton h-10 w-72" />
+        </div>
+      </header>
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 md:px-8 lg:grid-cols-[224px_1fr]">
+        <div className="hidden space-y-4 lg:block">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="skeleton h-4 w-full" />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="space-y-3">
+              <div className="skeleton aspect-3/4 w-full" />
+              <div className="skeleton h-4 w-3/4" />
+              <div className="skeleton h-4 w-1/3" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const sorts: { id: SortId; label: string }[] = [
   { id: 'recommended', label: 'Recomendados' },
@@ -80,21 +113,40 @@ function ShopPage() {
   const search = useSearch({ from: '/shop' })
   const navigate = useNavigate()
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const loaderData = Route.useLoaderData()
 
-  const category = categoryMap.get(search.category as never)
+  const { data: filtered = [] } = useQuery({
+    queryKey: [
+      'products',
+      search.category,
+      search.collection,
+      search.color,
+      search.material,
+      search.priceMin,
+      search.priceMax,
+      search.sort,
+    ],
+    queryFn: () =>
+      listProducts({
+        data: {
+          category: search.category,
+          collection: search.collection,
+          colors: search.color,
+          materials: search.material,
+          priceMin: search.priceMin,
+          priceMax: search.priceMax,
+          sort: search.sort,
+        },
+      }),
+  })
+
+  const products = filtered
+  const categories = loaderData.categories
+  const collections = loaderData.collections
+  const facets = loaderData.facets
+
+  const category = categories.find((c) => c.id === search.category)
   const collection = collections.find((c) => c.id === search.collection)
-
-  const products = sortProducts(
-    queryProducts({
-      category: search.category as never,
-      collection: search.collection as never,
-      colors: search.color,
-      materials: search.material,
-      priceMin: search.priceMin,
-      priceMax: search.priceMax,
-      sort: search.sort,
-    }),
-  )
 
   const setParam = (updates: Partial<ShopSearch>) => {
     navigate({
@@ -180,7 +232,7 @@ function ShopPage() {
 
       <FilterGroup title="Color">
         <ul className="space-y-2.5">
-          {allColors.map((c) => (
+          {facets.colors.map((c) => (
             <li key={c}>
               <label className="flex cursor-pointer items-center gap-3 text-sm">
                 <input
@@ -198,7 +250,7 @@ function ShopPage() {
 
       <FilterGroup title="Material">
         <ul className="space-y-2.5">
-          {allMaterials.map((m) => (
+          {facets.materials.map((m) => (
             <li key={m}>
               <label className="flex cursor-pointer items-center gap-3 text-sm">
                 <input

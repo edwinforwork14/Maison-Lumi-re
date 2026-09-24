@@ -12,10 +12,18 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "verbatimModuleSyntax": false,
+    "noFallthroughCasesInSwitch": true,
+    "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
+      "@/app/*": ["./src/app/*"],
+      "@/features/*": ["./src/features/*"],
+      "@/domain/*": ["./src/domain/*"],
+      "@/server/*": ["./src/server/*"],
+      "@/ui/*": ["./src/ui/*"],
+      "@/lib/*": ["./src/lib/*"],
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "tests"]
 }

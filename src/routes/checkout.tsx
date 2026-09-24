@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { useStore } from '@/lib/store'
-import { formatPrice, orderNumber } from '@/lib/format'
-import { shippingMethods, shippingCostFor, freeShippingThreshold } from '@/data'
-import type { ShippingMethodId, Order } from '@/data/types'
+import { formatPrice } from '@/lib/format'
+import { quoteCart, placeOrder } from '@/features/commerce.api'
+import type { CartTotals, ShippingMethodId } from '@/data/types'
 
 export const Route = createFileRoute('/checkout')({
   head: () => ({ meta: [{ title: 'Checkout — Maison Lumière' }] }),
@@ -30,15 +31,53 @@ const initialForm: FormData = {
   country: 'España',
 }
 
+const shippingLabels: Record<ShippingMethodId, { name: string; description: string; price: number }> = {
+  standard: { name: 'Estándar', description: '3 – 5 días laborables', price: 12 },
+  express: { name: 'Express', description: '24 – 48 h', price: 24 },
+}
+
 function CheckoutPage() {
-  const { cartTotals, clearCart } = useStore()
+  const { cart, clearCart } = useStore()
   const [form, setForm] = useState<FormData>(initialForm)
   const [shipping, setShipping] = useState<ShippingMethodId>('standard')
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
-  const [placedOrder, setPlacedOrder] = useState<Order | null>(null)
+  const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null)
+  const [placedTotal, setPlacedTotal] = useState(0)
+  const [submitError, setSubmitError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  const shippingCost = shippingCostFor(shipping, cartTotals.subtotal)
-  const total = cartTotals.subtotal + shippingCost
+  // Líneas desde el store local (persistencia v1) — el servidor re-cotiza.
+  const lines = useMemo(
+    () =>
+      cart.map((i) => ({
+        productId: i.productId,
+        color: i.color,
+        quantity: i.quantity,
+      })),
+    [cart],
+  )
+
+  // Fuente única de verdad: el servidor cotiza subtotal, envío y total (D5).
+  const { data: quote } = useQuery({
+    queryKey: ['cart-quote', lines, shipping],
+    queryFn: () => quoteCart({ data: { lines, shippingMethod: shipping } }),
+    enabled: lines.length > 0,
+  })
+
+  const shippingCost = quote?.shipping ?? 0
+  const total = quote?.total ?? 0
+
+  // Idempotencia: una clave por intento de compra del contenido actual.
+  const idempotencyKey = useMemo(
+    () =>
+      crypto.randomUUID(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lines],
+  )
+
+  useEffect(() => {
+    if (placedOrderNumber) window.scrollTo({ top: 0 })
+  }, [placedOrderNumber])
 
   const set = (key: keyof FormData) => (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -56,29 +95,37 @@ function CheckoutPage() {
     return Object.keys(errs).length === 0
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (cartTotals.lines.length === 0 || !validate()) return
+    if (lines.length === 0 || !validate() || submitting) return
 
-    const order: Order = {
-      number: orderNumber(),
-      createdAt: new Date().toISOString(),
-      items: cartTotals.lines,
-      totals: {
-        subtotal: cartTotals.subtotal,
-        shipping: shippingCost,
-        total,
-      },
-      customer: { ...form },
-      shippingMethod: shipping,
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      const result = await placeOrder({
+        data: {
+          lines,
+          shippingMethod: shipping,
+          customer: { ...form },
+          idempotencyKey,
+        },
+      })
+      setPlacedOrderNumber(result.orderNumber)
+      setPlacedTotal(result.total)
+      clearCart()
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : 'No se pudo completar el pedido. Inténtelo de nuevo.',
+      )
+    } finally {
+      setSubmitting(false)
     }
-    setPlacedOrder(order)
-    clearCart()
-    window.scrollTo({ top: 0 })
   }
 
   // ─── Pantalla de éxito ───
-  if (placedOrder) {
+  if (placedOrderNumber) {
     return (
       <div className="mx-auto max-w-2xl animate-fade-up px-4 py-24 text-center md:py-32">
         <p className="mb-3 text-[11px] uppercase tracking-[0.3em] text-taupe">
@@ -88,11 +135,11 @@ function CheckoutPage() {
           Gracias por su compra
         </h1>
         <p className="mb-2 text-sm text-taupe">
-          Su pedido <span className="text-ink">{placedOrder.number}</span> ha
+          Su pedido <span className="text-ink">{placedOrderNumber}</span> ha
           sido registrado correctamente.
         </p>
         <p className="mb-10 text-sm text-taupe">
-          Enviaremos la confirmación a {placedOrder.customer.email}.
+          Enviaremos la confirmación a {form.email}.
         </p>
         <div className="mx-auto mb-10 max-w-sm bg-sand p-8 text-left text-sm">
           <p className="mb-4 text-[11px] uppercase tracking-[0.25em] text-taupe">
@@ -100,22 +147,11 @@ function CheckoutPage() {
           </p>
           <div className="flex justify-between py-1">
             <span>Total</span>
-            <span className="tabular-nums">
-              {formatPrice(placedOrder.totals.total)}
-            </span>
-          </div>
-          <div className="flex justify-between py-1 text-taupe">
-            <span>Piezas</span>
-            <span>
-              {placedOrder.items.reduce((n, l) => n + l.quantity, 0)}
-            </span>
+            <span className="tabular-nums">{formatPrice(placedTotal)}</span>
           </div>
           <div className="flex justify-between py-1 text-taupe">
             <span>Envío</span>
-            <span>
-              {shippingMethods.find((m) => m.id === placedOrder.shippingMethod)
-                ?.name ?? 'Estándar'}
-            </span>
+            <span>{shippingLabels[shipping].name}</span>
           </div>
         </div>
         <Link
@@ -129,7 +165,7 @@ function CheckoutPage() {
   }
 
   // ─── Carrito vacío ───
-  if (cartTotals.lines.length === 0) {
+  if (lines.length === 0) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-24 text-center">
         <h1 className="mb-4 font-serif text-3xl font-light">
@@ -262,55 +298,57 @@ function CheckoutPage() {
               3 — Método de envío
             </h2>
             <div className="space-y-3">
-              {shippingMethods.map((m) => (
-                <label
-                  key={m.id}
-                  className={`flex cursor-pointer items-center justify-between border px-5 py-4 transition-colors ${
-                    shipping === m.id ? 'border-ink' : 'border-linen hover:border-clay'
-                  }`}
-                >
-                  <span className="flex items-center gap-4">
-                    <input
-                      type="radio"
-                      name="shipping"
-                      checked={shipping === m.id}
-                      onChange={() => setShipping(m.id)}
-                      className="h-3.5 w-3.5 accent-[#1a1815]"
-                    />
-                    <span>
-                      <span className="block text-sm">{m.name}</span>
-                      <span className="block text-xs text-taupe">
-                        {m.description}
+              {(Object.keys(shippingLabels) as ShippingMethodId[]).map((id) => {
+                const m = shippingLabels[id]
+                const free = (quote?.subtotal ?? 0) >= 500
+                return (
+                  <label
+                    key={id}
+                    className={`flex cursor-pointer items-center justify-between border px-5 py-4 transition-colors ${
+                      shipping === id ? 'border-ink' : 'border-linen hover:border-clay'
+                    }`}
+                  >
+                    <span className="flex items-center gap-4">
+                      <input
+                        type="radio"
+                        name="shipping"
+                        checked={shipping === id}
+                        onChange={() => setShipping(id)}
+                        className="h-3.5 w-3.5 accent-[#1a1815]"
+                      />
+                      <span>
+                        <span className="block text-sm">{m.name}</span>
+                        <span className="block text-xs text-taupe">
+                          {m.description}
+                        </span>
                       </span>
                     </span>
-                  </span>
-                  <span className="text-sm tabular-nums">
-                    {cartTotals.subtotal >= freeShippingThreshold
-                      ? 'Gratuito'
-                      : formatPrice(m.price)}
-                  </span>
-                </label>
-              ))}
+                    <span className="text-sm tabular-nums">
+                      {free ? 'Gratuito' : formatPrice(m.price)}
+                    </span>
+                  </label>
+                )
+              })}
             </div>
           </section>
         </div>
 
-        {/* Resumen */}
+        {/* Resumen — pintado desde la cotización del servidor */}
         <aside>
           <div className="bg-sand p-8 lg:sticky lg:top-32">
             <h2 className="mb-6 text-[11px] uppercase tracking-[0.25em] text-taupe">
               Su pedido
             </h2>
             <ul className="mb-6 space-y-4 border-b border-linen pb-6">
-              {cartTotals.lines.map((line) => (
-                <li key={`${line.product.id}-${line.color}`} className="flex gap-4">
+              {(quote?.lines ?? []).map((line) => (
+                <li key={line.sku} className="flex gap-4">
                   <img
-                    src={line.product.images[0]}
-                    alt={line.product.name}
+                    src={line.image}
+                    alt={line.name}
                     className="h-20 w-14 shrink-0 object-cover"
                   />
                   <div className="flex-1 text-sm">
-                    <p>{line.product.name}</p>
+                    <p>{line.name}</p>
                     <p className="text-xs text-taupe">
                       {line.color} · ×{line.quantity}
                     </p>
@@ -324,7 +362,7 @@ function CheckoutPage() {
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <dt>Subtotal</dt>
-                <dd className="tabular-nums">{formatPrice(cartTotals.subtotal)}</dd>
+                <dd className="tabular-nums">{formatPrice(quote?.subtotal ?? 0)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt>Envío</dt>
@@ -337,11 +375,15 @@ function CheckoutPage() {
                 <dd className="font-medium tabular-nums">{formatPrice(total)}</dd>
               </div>
             </dl>
+            {submitError && (
+              <p className="mt-4 text-xs text-gold">{submitError}</p>
+            )}
             <button
               type="submit"
-              className="mt-8 w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory transition-colors hover:bg-charcoal"
+              disabled={submitting || !quote}
+              className="mt-8 w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:bg-clay"
             >
-              Confirmar pedido
+              {submitting ? 'Procesando…' : 'Confirmar pedido'}
             </button>
             <p className="mt-4 text-center text-[11px] text-taupe">
               Pago simulado — sin cargo real

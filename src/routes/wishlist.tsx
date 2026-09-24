@@ -1,5 +1,6 @@
+import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { products } from '@/data/products'
+import { listProductsByIds } from '@/features/commerce.api'
 import { useStore } from '@/lib/store'
 import { ProductGrid } from '@/components/product/ProductGrid'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -11,7 +12,15 @@ export const Route = createFileRoute('/wishlist')({
 
 function WishlistPage() {
   const { wishlist } = useStore()
-  const saved = products.filter((p) => wishlist.includes(p.id))
+
+  const { data: saved = [] } = useQuery({
+    queryKey: ['wishlist-products', wishlist],
+    queryFn: () =>
+      wishlist.length > 0
+        ? listProductsByIds({ data: { ids: wishlist } })
+        : Promise.resolve([]),
+    enabled: wishlist.length > 0,
+  })
 
   return (
     <div className="mx-auto max-w-7xl animate-fade-in px-4 py-14 md:px-8 md:py-20">
@@ -20,7 +29,7 @@ function WishlistPage() {
         <EmptyState
           title="Su wishlist está vacía"
           message="Guarde las piezas que le enamoren tocando el corazón de cada producto."
-          action={{ label: 'Explorar el catálogo', to: '/shop' }}
+          action={{ label: 'Explorar el catálogo', linkProps: { to: '/shop' } }}
         />
       ) : (
         <ProductGrid products={saved} />

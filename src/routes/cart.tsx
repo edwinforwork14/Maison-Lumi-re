@@ -21,7 +21,7 @@ function CartPage() {
         <EmptyState
           title="Su carrito está vacío"
           message="Aún no ha añadido ninguna pieza. Descubra la nueva temporada."
-          action={{ label: 'Descubrir la colección', to: '/shop' }}
+          action={{ label: 'Descubrir la colección', linkProps: { to: '/shop' } }}
         />
       ) : (
         <div className="grid gap-12 lg:grid-cols-[1fr_360px]">

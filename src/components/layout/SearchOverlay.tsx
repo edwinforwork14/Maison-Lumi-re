@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { queryProducts } from '@/data'
+import { listProducts } from '@/features/commerce.api'
 import { formatPrice } from '@/lib/format'
 
+/**
+ * Búsqueda en servidor (plan.md A2/D9): ya no importa los mocks, consulta
+ * la server function; el overlay es un diálogo con foco inicial y Escape.
+ */
 export function SearchOverlay({
   open,
   onClose,
@@ -31,16 +36,25 @@ export function SearchOverlay({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
+  const trimmed = query.trim()
+
+  const { data: results = [] } = useQuery({
+    queryKey: ['search', trimmed],
+    queryFn: () => listProducts({ data: { search: trimmed } }),
+    enabled: open && trimmed.length > 0,
+  })
+
   if (!open) return null
 
-  const results = query.trim() ? queryProducts({ search: query }) : []
-
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-ivory animate-fade-in">
+    <div
+      className="fixed inset-0 z-[60] flex flex-col bg-ivory animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Búsqueda"
+    >
       <div className="flex items-center justify-between border-b border-linen px-6 py-5 md:px-12">
-        <p className="text-[11px] uppercase tracking-[0.3em] text-taupe">
-          Búsqueda
-        </p>
+        <p className="eyebrow">Búsqueda</p>
         <button
           type="button"
           onClick={onClose}
@@ -70,14 +84,14 @@ export function SearchOverlay({
           className="w-full border-b border-linen bg-transparent pb-4 font-serif text-3xl font-light outline-none placeholder:text-linen focus:border-ink md:text-5xl"
         />
 
-        {query.trim() === '' && (
+        {trimmed === '' && (
           <p className="mt-8 text-sm text-taupe">
             Escribe para buscar entre nuestras piezas.
           </p>
         )}
 
-        {query.trim() !== '' && results.length === 0 && (
-          <p className="mt-8 text-sm text-taupe">
+        {trimmed !== '' && results.length === 0 && (
+          <p className="mt-8 text-sm text-taupe" role="status">
             No hay resultados para “{query}”. Prueba con otro término.
           </p>
         )}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@/lib/store'
+import { registerFn } from '@/features/commerce.api'
 
 export const Route = createFileRoute('/register')({
   head: () => ({ meta: [{ title: 'Crear cuenta — Maison Lumière' }] }),
@@ -17,12 +18,13 @@ function RegisterPage() {
     password: '',
   })
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const set = (key: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.firstName.trim() || !form.lastName.trim()) {
       setError('Indique su nombre y apellidos.')
@@ -36,12 +38,21 @@ function RegisterPage() {
       setError('La contraseña debe tener al menos 4 caracteres.')
       return
     }
-    login({
-      firstName: form.firstName,
-      lastName: form.lastName,
-      email: form.email,
-    })
-    navigate({ to: '/account' })
+    setSubmitting(true)
+    setError('')
+    try {
+      const user = await registerFn({ data: form })
+      login(user)
+      navigate({ to: '/account' })
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message.includes('existe')
+          ? 'Ya existe una cuenta con este email.'
+          : 'No se pudo crear la cuenta. Inténtelo de nuevo.',
+      )
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -83,9 +94,10 @@ function RegisterPage() {
         {error && <p className="text-xs text-gold">{error}</p>}
         <button
           type="submit"
-          className="w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory transition-colors hover:bg-charcoal"
+          disabled={submitting}
+          className="w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:bg-clay"
         >
-          Crear cuenta
+          {submitting ? 'Creando…' : 'Crear cuenta'}
         </button>
       </form>
 

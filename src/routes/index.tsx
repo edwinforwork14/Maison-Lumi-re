@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { getFeaturedProducts, getNewArrivals, categories, collections } from '@/data'
+import { listProducts, listCategories, listCollections } from '@/features/commerce.api'
 import { ProductGrid } from '@/components/product/ProductGrid'
 import { SectionHeading } from '@/components/ui/SectionHeading'
-import { Button } from '@/components/ui/Button'
+import { ButtonLink } from '@/components/ui/Button'
 
 export const Route = createFileRoute('/')({
   component: Home,
@@ -16,11 +16,21 @@ export const Route = createFileRoute('/')({
       },
     ],
   }),
+  // Datos en servidor (plan.md A2): la home ya no importa mocks.
+  loader: async () => {
+    const [all, categories, collections] = await Promise.all([
+      listProducts(),
+      listCategories(),
+      listCollections(),
+    ])
+    const featured = all.filter((p) => p.featured).slice(0, 8)
+    const arrivals = [...all].sort((a, b) => Number(b.isNew) - Number(a.isNew)).slice(0, 4)
+    return { featured, arrivals, categories, collections }
+  },
 })
 
 function Home() {
-  const featured = getFeaturedProducts(8)
-  const arrivals = getNewArrivals(4)
+  const { featured, arrivals, categories, collections } = Route.useLoaderData()
 
   return (
     <div className="animate-fade-in">
@@ -39,9 +49,9 @@ function Home() {
           <h1 className="mb-8 max-w-xl font-serif text-4xl font-light leading-tight text-ivory md:text-6xl">
             La luz de las cosas bien hechas
           </h1>
-          <Button to="/shop" size="lg">
+          <ButtonLink to="/shop" size="lg">
             Descubrir la colección
-          </Button>
+          </ButtonLink>
         </div>
       </section>
 
@@ -50,7 +60,7 @@ function Home() {
         <SectionHeading
           eyebrow="Universos"
           title="Explorar por categoría"
-          action={{ label: 'Ver todo', to: '/shop' }}
+          action={{ label: 'Ver todo', linkProps: { to: '/shop' } }}
         />
         <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
           {categories.map((c, i) => (
@@ -81,7 +91,7 @@ function Home() {
         <SectionHeading
           eyebrow="Selección"
           title="Piezas destacadas"
-          action={{ label: 'Ver catálogo', to: '/shop' }}
+          action={{ label: 'Ver catálogo', linkProps: { to: '/shop' } }}
         />
         <ProductGrid products={featured} />
       </section>
@@ -101,13 +111,14 @@ function Home() {
               Acetatos pulidos a mano, cueros de curtido vegetal y metal bañado
               en oro fino. Producción limitada, sin temporadas descartables.
             </p>
-            <Button
+            <ButtonLink
               variant="outline"
-              to="/shop?collection=atelier"
+              to="/shop"
+              search={{ collection: 'atelier' }}
               className="border-ivory text-ivory hover:bg-ivory hover:text-ink"
             >
               Conocer Atelier
-            </Button>
+            </ButtonLink>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <img
@@ -159,7 +170,7 @@ function Home() {
         <SectionHeading
           eyebrow="Recién llegados"
           title="Novedades"
-          action={{ label: 'Ver todas', to: '/shop?sort=new' }}
+          action={{ label: 'Ver todas', linkProps: { to: '/shop', search: { sort: 'new' } } }}
         />
         <ProductGrid products={arrivals} />
       </section>

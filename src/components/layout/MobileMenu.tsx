@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { categories, collections } from '@/data'
 
@@ -6,7 +7,53 @@ interface MobileMenuProps {
   onClose: () => void
 }
 
+/**
+ * Menú móvil accesible (plan.md D9): role="dialog", aria-modal, foco
+ * atrapado, cierre con Escape y bloqueo de scroll mientras está abierto.
+ */
 export function MobileMenu({ open, onClose }: MobileMenuProps) {
+  const panelRef = useRef<HTMLElement | null>(null)
+  const triggerRef = useRef<Element | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    triggerRef.current = document.activeElement
+
+    const panel = panelRef.current
+    const focusables = panel?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )
+    focusables?.[0]?.focus()
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key === 'Tab' && focusables && focusables.length > 0) {
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        const active = document.activeElement
+        if (e.shiftKey && active === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+      const trigger = triggerRef.current
+      if (trigger instanceof HTMLElement) trigger.focus()
+    }
+  }, [open, onClose])
+
   return (
     <div
       className={`fixed inset-0 z-50 lg:hidden ${open ? '' : 'pointer-events-none'}`}
@@ -19,6 +66,10 @@ export function MobileMenu({ open, onClose }: MobileMenuProps) {
         }`}
       />
       <aside
+        ref={panelRef}
+        role="dialog"
+        aria-modal={open}
+        aria-label="Menú de navegación"
         className={`absolute left-0 top-0 h-full w-[85%] max-w-sm overflow-y-auto bg-ivory transition-transform duration-500 ease-out ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -36,9 +87,7 @@ export function MobileMenu({ open, onClose }: MobileMenuProps) {
         </header>
 
         <nav className="px-6 py-8">
-          <p className="mb-4 text-[11px] uppercase tracking-[0.25em] text-taupe">
-            Categorías
-          </p>
+          <p className="eyebrow mb-4">Categorías</p>
           <ul className="space-y-4">
             <li>
               <Link
@@ -63,9 +112,7 @@ export function MobileMenu({ open, onClose }: MobileMenuProps) {
             ))}
           </ul>
 
-          <p className="mb-4 mt-10 text-[11px] uppercase tracking-[0.25em] text-taupe">
-            Colecciones
-          </p>
+          <p className="eyebrow mb-4 mt-10">Colecciones</p>
           <ul className="space-y-3">
             {collections.map((c) => (
               <li key={c.id}>
@@ -81,9 +128,7 @@ export function MobileMenu({ open, onClose }: MobileMenuProps) {
             ))}
           </ul>
 
-          <p className="mb-4 mt-10 text-[11px] uppercase tracking-[0.25em] text-taupe">
-            Cuenta
-          </p>
+          <p className="eyebrow mb-4 mt-10">Cuenta</p>
           <ul className="space-y-3 text-sm">
             <li>
               <Link to="/account" onClick={onClose}>

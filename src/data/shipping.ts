@@ -1,5 +1,14 @@
-import type { ShippingMethod } from './types'
+import type { ShippingMethod, ShippingMethodId } from '@/domain/pricing'
+import {
+  shippingCostFor as domainShippingCostFor,
+  isFreeShipping,
+  FREE_SHIPPING_THRESHOLD,
+} from '@/domain/pricing'
 
+/**
+ * Adaptador de semillas de envío (plan.md §8.2: data/shipping → seed + dominio).
+ * El know-how (umbral, gratuidad) vive en domain/pricing; aquí solo están los datos.
+ */
 export const shippingMethods: ShippingMethod[] = [
   {
     id: 'standard',
@@ -15,12 +24,11 @@ export const shippingMethods: ShippingMethod[] = [
   },
 ]
 
-export const freeShippingThreshold = 500
+export { FREE_SHIPPING_THRESHOLD as freeShippingThreshold, isFreeShipping }
 
 export function shippingCostFor(
-  methodId: ShippingMethod['id'],
+  methodId: ShippingMethodId,
   subtotal: number,
 ): number {
-  if (subtotal >= freeShippingThreshold) return 0
-  return shippingMethods.find((m) => m.id === methodId)?.price ?? 0
+  return domainShippingCostFor(shippingMethods, methodId, subtotal)
 }

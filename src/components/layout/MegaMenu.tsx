@@ -78,15 +78,20 @@ export const navSections: NavSection[] = [
   })),
 ]
 
+/**
+ * Panel del mega menú (plan.md D1): visible por hover y por foco gracias a
+ * la variante group-nav + focus-within; operable solo con teclado.
+ */
 export function MegaMenu({ section }: { section: NavSection }) {
   return (
-    <div className="absolute inset-x-0 top-full hidden border-b border-linen bg-ivory shadow-[0_20px_40px_-20px_rgba(26,24,21,0.15)] group-nav:block animate-fade-in">
+    <div
+      className="absolute inset-x-0 top-full hidden border-b border-linen bg-ivory shadow-[0_20px_40px_-20px_rgba(26,24,21,0.15)] group-nav:block animate-fade-in"
+      aria-label={`Sección ${section.label}`}
+    >
       <div className="mx-auto grid max-w-7xl grid-cols-12 gap-10 px-8 py-12">
         {section.sections.map((s) => (
           <div key={s.title} className="col-span-3">
-            <p className="mb-4 text-[11px] uppercase tracking-[0.25em] text-taupe">
-              {s.title}
-            </p>
+            <p className="eyebrow mb-4">{s.title}</p>
             <ul className="space-y-3">
               {s.links.map((l) => (
                 <li key={l.label}>
