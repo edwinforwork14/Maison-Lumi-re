@@ -89,6 +89,35 @@ def main():
         first_adjust = page.locator("button:has-text('Ajustar')").first
         check("5b. ofrece el ajuste con motivo", first_adjust.count() == 1)
 
+        # ── 4c. Ficha de producto con gestión de variantes ───────────────────
+        try:
+            page.goto(f"{BASE}/admin/products", wait_until="domcontentloaded")
+            # Se espera a la TABLA: las etiquetas de filtro existen antes de que
+            # llegue la consulta, así que esperar por ellas no basta.
+            page.wait_for_selector("main table", timeout=15_000)
+            page.wait_for_timeout(600)
+            open_product = page.locator("a:has-text('Abrir')").first
+            if open_product.count() > 0:
+                href = open_product.get_attribute("href")
+                page.goto(BASE + href, wait_until="domcontentloaded")
+                page.wait_for_selector("main :text('Variantes')", timeout=15_000)
+                detail_text = page.inner_text("main").upper()
+                check(
+                    "4c. la ficha de producto gestiona variantes",
+                    "VARIANTES" in detail_text and "NUEVA VARIANTE" in detail_text,
+                )
+            else:
+                check("4c. la ficha de producto gestiona variantes", False, "sin productos")
+        except Exception as exc:  # noqa: BLE001
+            check("4c. la ficha de producto gestiona variantes", False, str(exc)[:140])
+
+        # ── 4d. Categorías: listado y alta ───────────────────────────────────
+        try:
+            page.goto(f"{BASE}/admin/categories", wait_until="domcontentloaded")
+            page.wait_for_selector("main :text('Nueva categoría')", timeout=15_000)
+            check("4d. la gestión de categorías está operativa", True)
+        except Exception as exc:  # noqa: BLE001
+            check("4d. la gestión de categorías está operativa", False, str(exc)[:140])
         # ── 5c/5d. Pedidos: listado y detalle con transiciones ───────────────
         page.goto(f"{BASE}/admin/orders", wait_until="domcontentloaded")
         try:

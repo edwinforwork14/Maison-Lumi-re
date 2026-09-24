@@ -20,12 +20,19 @@ import {
   adjustAdminInventory,
   createAdminProduct,
   dashboardKpis,
+  deleteAdminVariant,
+  getAdminProduct,
+  listAdminCategories,
   listAdminInventory,
   listAdminProducts,
   listAuditEntries,
   setAdminProductStatus,
   updateAdminProduct,
+  upsertAdminCategory,
+  upsertAdminVariant,
+  type AdminCategoryRow,
   type AdminInventoryRow,
+  type AdminProductDetail,
   type AdminProductListItem,
   type AuditListItem,
   type DashboardKpis,
@@ -334,11 +341,75 @@ export const adminGetCustomer = createServerFn({ method: 'GET' })
     getAdminCustomer(await currentActor(), data.id),
   )
 
+// ─── Variantes y categorías ─────────────────────────────────────────────────
+
+export const adminGetProduct = createServerFn({ method: 'GET' })
+  .validator(z.object({ id: z.string().uuid() }))
+  .handler(async ({ data }): Promise<AdminProductDetail> =>
+    getAdminProduct(await currentActor(), data.id),
+  )
+
+const variantSchema = z.object({
+  productId: z.string().uuid(),
+  id: z.string().uuid().optional(),
+  sku: z
+    .string()
+    .trim()
+    .min(2)
+    .max(60)
+    .regex(/^[A-Za-z0-9._-]+$/, 'El SKU solo admite letras, números, punto, guion y guion bajo'),
+  size: z.string().trim().max(30).default('Única'),
+  color: z.string().trim().min(2).max(40),
+  priceCents: z.number().int().nonnegative(),
+  compareAtPriceCents: z.number().int().nonnegative().nullable().optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+})
+
+export const adminUpsertVariant = createServerFn({ method: 'POST' })
+  .validator(variantSchema)
+  .handler(async ({ data }): Promise<{ id: string; created: boolean }> =>
+    upsertAdminVariant(await currentActor(), data),
+  )
+
+export const adminDeleteVariant = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string().uuid() }))
+  .handler(async ({ data }): Promise<{ deleted: boolean; archived: boolean }> =>
+    deleteAdminVariant(await currentActor(), data.id),
+  )
+
+export const adminListCategories = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<AdminCategoryRow[]> => listAdminCategories(await currentActor()),
+)
+
+const categorySchema = z.object({
+  id: z.string().uuid().optional(),
+  parentId: z.string().uuid().nullable().optional(),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(60)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'El slug solo admite minúsculas, números y guiones'),
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(500).nullable().optional(),
+  position: z.number().int().min(0).max(9_999).optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+})
+
+export const adminUpsertCategory = createServerFn({ method: 'POST' })
+  .validator(categorySchema)
+  .handler(async ({ data }): Promise<{ id: string; created: boolean }> =>
+    upsertAdminCategory(await currentActor(), data),
+  )
+
 /** DTOs para el cliente (solo tipos: se borran al compilar). */
 export type { AdminActor } from '@/server/services/admin/actor'
 export type {
+  AdminCategoryRow,
   AdminInventoryRow,
+  AdminProductDetail,
   AdminProductListItem,
+  AdminVariant,
   AuditListItem,
   DashboardKpis,
 } from '@/server/services/admin/catalog-admin'

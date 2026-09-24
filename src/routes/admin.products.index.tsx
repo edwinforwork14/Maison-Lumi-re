@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   adminCreateProduct,
   adminListProducts,
@@ -11,7 +11,7 @@ import { listCategories } from '@/features/commerce.api'
 import { formatCents } from '@/lib/money-format'
 
 /** Catálogo: listar con filtros y cursor, crear y publicar/archivar. */
-export const Route = createFileRoute('/admin/products')({
+export const Route = createFileRoute('/admin/products/')({
   component: AdminProductsPage,
 })
 
@@ -250,6 +250,13 @@ function Row({
       <td className="py-2 pr-4 tabular-nums">{product.totalStock}</td>
       <td className="py-2">
         <div className="flex gap-2">
+          <Link
+            to="/admin/products/$id"
+            params={{ id: product.id }}
+            className="btn btn-outline px-3 py-1 label"
+          >
+            Abrir
+          </Link>
           {product.status !== 'active' && (
             <button
               type="button"

@@ -11,9 +11,9 @@ import { and, asc, count, desc, eq, gt, gte, inArray, lt, lte, or, sql } from 'd
 import { money, type Money } from '../../../domain/money/money.ts'
 import { getDb, type Database } from '../../db/client.ts'
 import { clampPageSize, decodeCursor, paginate, type Page } from '../../db/pagination.ts'
-import { inventoryItems } from '../../db/schema/inventory.ts'
+import { inventoryItems, inventoryMovements } from '../../db/schema/inventory.ts'
 import { orderItems, orders } from '../../db/schema/orders.ts'
-import { products, productVariants } from '../../db/schema/catalog.ts'
+import { categories, products, productVariants } from '../../db/schema/catalog.ts'
 import { createPostgresAuditRepository } from '../../db/repositories/audit.postgres.ts'
 import { createPostgresInventoryRepository } from '../../db/repositories/inventory.postgres.ts'
 import { AppError } from '../../errors.ts'
@@ -585,4 +585,438 @@ export async function countAuditSince(
     .from(auditLogs)
     .where(and(eq(auditLogs.entity, entity), gt(auditLogs.createdAt, since)))
   return Number(row?.n ?? 0)
+}
+
+// ─── Ficha de producto, variantes y categorías (G2 completo) ────────────────
+
+export interface AdminVariant {
+  readonly id: string
+  readonly sku: string
+  readonly size: string
+  readonly color: string
+  readonly priceCents: number
+  readonly compareAtPriceCents: number | null
+  readonly status: string
+  readonly onHand: number
+  readonly reserved: number
+  readonly available: number
+}
+
+export interface AdminProductDetail {
+  readonly id: string
+  readonly slug: string
+  readonly name: string
+  readonly status: string
+  readonly featured: boolean
+  readonly publishedAt: Date | null
+  readonly categoryId: string
+  readonly shortDescription: string | null
+  readonly description: string | null
+  readonly seoTitle: string | null
+  readonly seoDescription: string | null
+  readonly variants: readonly AdminVariant[]
+}
+
+export async function getAdminProduct(
+  actor: AdminActor | null,
+  productId: string,
+  db: Database = getDb(),
+): Promise<AdminProductDetail> {
+  assertPermission(actor, PERMISSIONS.productsRead)
+
+  const [product] = await db
+    .select()
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1)
+  if (!product) throw new AppError('NOT_FOUND', 'Producto inexistente')
+
+  const variants = await db
+    .select({
+      id: productVariants.id,
+      sku: productVariants.sku,
+      size: productVariants.size,
+      color: productVariants.color,
+      priceCents: productVariants.priceCents,
+      compareAtPriceCents: productVariants.compareAtPriceCents,
+      status: productVariants.status,
+      onHand: inventoryItems.onHand,
+      reserved: inventoryItems.reserved,
+    })
+    .from(productVariants)
+    .leftJoin(inventoryItems, eq(inventoryItems.variantId, productVariants.id))
+    .where(eq(productVariants.productId, productId))
+    .orderBy(asc(productVariants.color), asc(productVariants.size))
+
+  return {
+    id: product.id,
+    slug: product.slug,
+    name: product.name,
+    status: product.status,
+    featured: product.featured,
+    publishedAt: product.publishedAt,
+    categoryId: product.categoryId,
+    shortDescription: product.shortDescription,
+    description: product.description,
+    seoTitle: product.seoTitle,
+    seoDescription: product.seoDescription,
+    variants: variants.map((variant) => {
+      const onHand = variant.onHand ?? 0
+      const reserved = variant.reserved ?? 0
+      return {
+        id: variant.id,
+        sku: variant.sku,
+        size: variant.size,
+        color: variant.color,
+        priceCents: variant.priceCents,
+        compareAtPriceCents: variant.compareAtPriceCents,
+        status: variant.status,
+        onHand,
+        reserved,
+        available: onHand - reserved,
+      }
+    }),
+  }
+}
+
+export interface VariantInput {
+  readonly productId: string
+  /** Si se indica, actualiza esa variante; si no, crea una nueva. */
+  readonly id?: string
+  readonly sku: string
+  readonly size: string
+  readonly color: string
+  readonly priceCents: number
+  readonly compareAtPriceCents?: number | null
+  readonly status?: 'draft' | 'active' | 'archived'
+}
+
+/**
+ * Crea o actualiza una variante. Al crearla **siempre** deja su fila de
+ * existencias: una variante sin `inventory_items` se comporta como stock 0 y
+ * sería imposible de vender sin pasar por otro sitio.
+ */
+export async function upsertAdminVariant(
+  actor: AdminActor | null,
+  input: VariantInput,
+  db: Database = getDb(),
+): Promise<{ id: string; created: boolean }> {
+  assertPermission(actor, PERMISSIONS.productsWrite)
+  if (!Number.isInteger(input.priceCents) || input.priceCents < 0) {
+    throw new AppError('VALIDATION', 'El precio debe ser un entero en céntimos')
+  }
+  if (
+    input.compareAtPriceCents != null &&
+    input.compareAtPriceCents < input.priceCents
+  ) {
+    throw new AppError(
+      'VALIDATION',
+      'El precio tachado no puede ser menor que el precio actual',
+    )
+  }
+  const audit = createPostgresAuditRepository(db)
+
+  return db.transaction(async (tx) => {
+    const [product] = await tx
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.id, input.productId))
+      .limit(1)
+    if (!product) throw new AppError('NOT_FOUND', 'Producto inexistente')
+
+    // SKU repetido: se comprueba antes para dar un error claro (y la base lo
+    // impide igualmente con su índice único).
+    const duplicate = await tx
+      .select({ id: productVariants.id })
+      .from(productVariants)
+      .where(eq(productVariants.sku, input.sku.trim()))
+      .limit(1)
+    if (duplicate.length > 0 && duplicate[0]!.id !== input.id) {
+      throw new AppError('CONFLICT', `Ya existe una variante con el SKU ${input.sku}`)
+    }
+
+    const values = {
+      productId: input.productId,
+      sku: input.sku.trim(),
+      size: input.size.trim() || 'Única',
+      color: input.color.trim(),
+      priceCents: input.priceCents,
+      compareAtPriceCents: input.compareAtPriceCents ?? null,
+      status: input.status ?? 'draft',
+    }
+
+    if (input.id) {
+      const [current] = await tx
+        .select()
+        .from(productVariants)
+        .where(eq(productVariants.id, input.id))
+        .for('update')
+      if (!current) throw new AppError('NOT_FOUND', 'Variante inexistente')
+
+      await tx
+        .update(productVariants)
+        .set({ ...values, updatedAt: new Date() })
+        .where(eq(productVariants.id, input.id))
+
+      await audit.record({
+        actorId: actor!.userId,
+        actorKind: 'user',
+        action: 'variant.update',
+        entity: 'product_variants',
+        entityId: input.id,
+        before: { sku: current.sku, priceCents: current.priceCents, status: current.status },
+        after: { sku: values.sku, priceCents: values.priceCents, status: values.status },
+      })
+      return { id: input.id, created: false }
+    }
+
+    const [created] = await tx
+      .insert(productVariants)
+      .values(values)
+      .returning({ id: productVariants.id })
+
+    await tx
+      .insert(inventoryItems)
+      .values({ variantId: created!.id, onHand: 0, reserved: 0, lowStockThreshold: 0 })
+      .onConflictDoNothing({ target: inventoryItems.variantId })
+
+    await audit.record({
+      actorId: actor!.userId,
+      actorKind: 'user',
+      action: 'variant.create',
+      entity: 'product_variants',
+      entityId: created!.id,
+      before: null,
+      after: { sku: values.sku, priceCents: values.priceCents, color: values.color },
+    })
+    return { id: created!.id, created: true }
+  })
+}
+
+/**
+ * Borra una variante. Si algún pedido la referencia, la base lo impide
+ * (`ON DELETE RESTRICT`) y aquí se traduce a un `CONFLICT` explicable: el
+ * histórico comercial no se reescribe.
+ */
+export async function deleteAdminVariant(
+  actor: AdminActor | null,
+  variantId: string,
+  db: Database = getDb(),
+): Promise<{ deleted: boolean; archived: boolean }> {
+  assertPermission(actor, PERMISSIONS.productsWrite)
+  const audit = createPostgresAuditRepository(db)
+
+  return db.transaction(async (tx) => {
+    const [variant] = await tx
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.id, variantId))
+      .for('update')
+    if (!variant) throw new AppError('NOT_FOUND', 'Variante inexistente')
+
+    const [used] = await tx
+      .select({ n: count() })
+      .from(orderItems)
+      .where(eq(orderItems.variantId, variantId))
+    if (Number(used?.n ?? 0) > 0) {
+      throw new AppError(
+        'CONFLICT',
+        'La variante aparece en pedidos: archívela en lugar de borrarla',
+      )
+    }
+
+    const [stock] = await tx
+      .select({ onHand: inventoryItems.onHand, reserved: inventoryItems.reserved })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.variantId, variantId))
+      .limit(1)
+    if (stock && (stock.onHand !== 0 || stock.reserved !== 0)) {
+      throw new AppError(
+        'CONFLICT',
+        `No se borra una variante con stock (${stock.onHand} uds., ${stock.reserved} reservadas): ajústelo a cero primero`,
+      )
+    }
+
+    // El ledger es append-only: si hay movimientos, el histórico comercial impide
+    // borrar (la FK lo haría cumplir igualmente). Se archiva en su lugar.
+    const [movements] = await tx
+      .select({ n: count() })
+      .from(inventoryMovements)
+      .where(eq(inventoryMovements.variantId, variantId))
+    if (Number(movements?.n ?? 0) > 0) {
+      await tx
+        .update(productVariants)
+        .set({ status: 'archived', updatedAt: new Date() })
+        .where(eq(productVariants.id, variantId))
+      await audit.record({
+        actorId: actor!.userId,
+        actorKind: 'user',
+        action: 'variant.archive',
+        entity: 'product_variants',
+        entityId: variantId,
+        before: { status: variant.status },
+        after: { status: 'archived', reason: 'tiene movimientos de inventario' },
+      })
+      return { deleted: false, archived: true }
+    }
+
+    await tx.delete(inventoryItems).where(eq(inventoryItems.variantId, variantId))
+    await tx.delete(productVariants).where(eq(productVariants.id, variantId))
+
+    await audit.record({
+      actorId: actor!.userId,
+      actorKind: 'user',
+      action: 'variant.delete',
+      entity: 'product_variants',
+      entityId: variantId,
+      before: { sku: variant.sku, priceCents: variant.priceCents },
+      after: null,
+    })
+    return { deleted: true, archived: false }
+  })
+}
+
+// ─── Categorías ─────────────────────────────────────────────────────────────
+
+export interface AdminCategoryRow {
+  readonly id: string
+  readonly slug: string
+  readonly name: string
+  readonly parentId: string | null
+  readonly position: number
+  readonly status: string
+  readonly productCount: number
+}
+
+export async function listAdminCategories(
+  actor: AdminActor | null,
+  db: Database = getDb(),
+): Promise<AdminCategoryRow[]> {
+  assertPermission(actor, PERMISSIONS.productsRead)
+  const rows = await db
+    .select({
+      id: categories.id,
+      slug: categories.slug,
+      name: categories.name,
+      parentId: categories.parentId,
+      position: categories.position,
+      status: categories.status,
+      productCount: sql<number>`(select count(*)::int from products p where p.category_id = ${categories.id} and p.deleted_at is null)`,
+    })
+    .from(categories)
+    .orderBy(asc(categories.position), asc(categories.name))
+  return rows.map((row) => ({ ...row, productCount: Number(row.productCount) }))
+}
+
+export interface CategoryInput {
+  readonly id?: string
+  readonly parentId?: string | null
+  readonly slug: string
+  readonly name: string
+  readonly description?: string | null
+  readonly position?: number
+  readonly status?: 'draft' | 'active' | 'archived'
+}
+
+/**
+ * Crea o actualiza una categoría. Se rechaza crear un ciclo (una categoría que
+ * sea antecesora de sí misma) porque dejaría el árbol inrecorrible.
+ */
+export async function upsertAdminCategory(
+  actor: AdminActor | null,
+  input: CategoryInput,
+  db: Database = getDb(),
+): Promise<{ id: string; created: boolean }> {
+  assertPermission(actor, PERMISSIONS.productsWrite)
+  const audit = createPostgresAuditRepository(db)
+
+  return db.transaction(async (tx) => {
+    if (input.parentId) {
+      if (input.parentId === input.id) {
+        throw new AppError('VALIDATION', 'Una categoría no puede ser su propio padre')
+      }
+      // Subir por la cadena de ancestros: si aparece el propio id, hay ciclo.
+      let cursor: string | null = input.parentId
+      const seen = new Set<string>()
+      while (cursor) {
+        if (cursor === input.id) {
+          throw new AppError('CONFLICT', 'La jerarquía propuesta crea un ciclo')
+        }
+        if (seen.has(cursor)) break
+        seen.add(cursor)
+        const [parent] = await tx
+          .select({ parentId: categories.parentId })
+          .from(categories)
+          .where(eq(categories.id, cursor))
+          .limit(1)
+        cursor = parent?.parentId ?? null
+      }
+    }
+
+    const values = {
+      parentId: input.parentId ?? null,
+      slug: input.slug.trim(),
+      name: input.name.trim(),
+      description: input.description ?? null,
+      position: input.position ?? 0,
+      status: input.status ?? 'draft',
+    }
+
+    if (input.id) {
+      const [current] = await tx
+        .select()
+        .from(categories)
+        .where(eq(categories.id, input.id))
+        .for('update')
+      if (!current) throw new AppError('NOT_FOUND', 'Categoría inexistente')
+
+      await tx
+        .update(categories)
+        .set({ ...values, updatedAt: new Date() })
+        .where(eq(categories.id, input.id))
+
+      await audit.record({
+        actorId: actor!.userId,
+        actorKind: 'user',
+        action: 'category.update',
+        entity: 'categories',
+        entityId: input.id,
+        before: { slug: current.slug, name: current.name, status: current.status },
+        after: { slug: values.slug, name: values.name, status: values.status },
+      })
+      return { id: input.id, created: false }
+    }
+
+    const [duplicate] = await tx
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        and(
+          eq(categories.slug, values.slug),
+          input.parentId
+            ? eq(categories.parentId, input.parentId)
+            : sql`${categories.parentId} is null`,
+        ),
+      )
+      .limit(1)
+    if (duplicate) {
+      throw new AppError('CONFLICT', `Ya existe la categoría ${values.slug} en ese nivel`)
+    }
+
+    const [created] = await tx
+      .insert(categories)
+      .values(values)
+      .returning({ id: categories.id })
+
+    await audit.record({
+      actorId: actor!.userId,
+      actorKind: 'user',
+      action: 'category.create',
+      entity: 'categories',
+      entityId: created!.id,
+      before: null,
+      after: { slug: values.slug, name: values.name },
+    })
+    return { id: created!.id, created: true }
+  })
 }
