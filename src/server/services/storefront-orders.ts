@@ -439,7 +439,7 @@ export interface PublicSettings {
 /** Ajustes que puede leer la tienda (nada de secretos: son valores públicos). */
 export async function readPublicSettings(db: Database = getDb()): Promise<PublicSettings> {
   const rows = await db
-    .select({ key: siteSettings.key, value: siteSettings.value })
+    .select({ key: siteSettings.key, value: siteSettings.value, type: siteSettings.type })
     .from(siteSettings)
     .where(
       inArray(siteSettings.key, [
@@ -450,7 +450,13 @@ export async function readPublicSettings(db: Database = getDb()): Promise<Public
         'contact.whatsapp_name',
       ]),
     )
-  const byKey = new Map(rows.map((row) => [row.key, row.value]))
+  // El valor se COERCIONA según su tipo declarado, no según su forma en JSON: un
+  // teléfono escrito como número (`34600111222`) o un umbral escrito como texto
+  // deben leerse igual. Sin esto, un ajuste mal tipado rompía el checkout en
+  // silencio (el enlace de WhatsApp no aparecía).
+  const byKey = new Map(
+    rows.map((row) => [row.key, coerceSettingValue(row.value, row.type)]),
+  )
   const threshold = Number(
     byKey.get('shipping.free_threshold_cents') ?? DEFAULT_FREE_SHIPPING_THRESHOLD_CENTS,
   )
@@ -464,5 +470,21 @@ export async function readPublicSettings(db: Database = getDb()): Promise<Public
       : DEFAULT_FREE_SHIPPING_THRESHOLD_CENTS,
     whatsappPhone: typeof phone === 'string' ? phone : null,
     whatsappName: typeof name === 'string' ? name : null,
+  }
+}
+/** Coacciona el valor de un ajuste a la forma que declara su columna `type`. */
+export function coerceSettingValue(value: unknown, type: string): unknown {
+  if (value === null || value === undefined) return value
+  switch (type) {
+    case 'string':
+      return typeof value === 'string' ? value : String(value)
+    case 'number': {
+      const parsed = typeof value === 'number' ? value : Number(value)
+      return Number.isFinite(parsed) ? parsed : null
+    }
+    case 'boolean':
+      return typeof value === 'boolean' ? value : value === 'true'
+    default:
+      return value
   }
 }
