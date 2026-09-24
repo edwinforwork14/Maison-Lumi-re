@@ -89,6 +89,42 @@ def main():
         first_adjust = page.locator("button:has-text('Ajustar')").first
         check("5b. ofrece el ajuste con motivo", first_adjust.count() == 1)
 
+        # ── 5c/5d. Pedidos: listado y detalle con transiciones ───────────────
+        page.goto(f"{BASE}/admin/orders", wait_until="domcontentloaded")
+        try:
+            page.wait_for_selector("main", timeout=15_000)
+            page.wait_for_timeout(1_200)
+            orders_text = page.inner_text("main")
+            check(
+                "5c. el listado de pedidos carga sin error",
+                "No se pudieron cargar" not in orders_text
+                and ("NÚMERO" in orders_text.upper() or "NO HAY PEDIDOS" in orders_text.upper()),
+                orders_text[:120],
+            )
+            open_link = page.locator("a:has-text('Abrir')").first
+            if open_link.count() > 0:
+                href = open_link.get_attribute("href")
+                page.goto(BASE + href, wait_until="domcontentloaded")
+                page.wait_for_selector("main", timeout=15_000)
+                page.wait_for_timeout(1_500)
+                detail = page.inner_text("main")
+                check(
+                    "5d. el detalle muestra líneas, pagos, historial y reembolso",
+                    all(w in detail.upper() for w in ["LÍNEAS", "PAGOS", "HISTORIAL", "REEMBOLSO"]),
+                    detail[:220],
+                )
+            else:
+                check("5d. el detalle muestra líneas, pagos, historial y reembolso", False, "sin pedidos")
+        except Exception as exc:  # noqa: BLE001
+            check("5c. el listado de pedidos carga sin error", False, str(exc)[:140])
+
+        # ── 5e. Clientes: aviso explícito sobre la PII ───────────────────────
+        page.goto(f"{BASE}/admin/customers", wait_until="domcontentloaded")
+        try:
+            page.wait_for_selector("main :text('customers:pii')", timeout=15_000)
+            check("5e. clientes explica el régimen de PII aplicado", True)
+        except Exception as exc:  # noqa: BLE001
+            check("5e. clientes explica el régimen de PII aplicado", False, str(exc)[:140])
         # ── 6. RBAC en la interfaz: `admin` no lee auditoría ─────────────────
         page.goto(f"{BASE}/admin/audit", wait_until="networkidle")
         audit = page.inner_text("main")

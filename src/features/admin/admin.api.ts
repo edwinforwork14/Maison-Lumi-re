@@ -33,6 +33,18 @@ import {
 import { findActiveUserByEmail } from '@/server/db/repositories/sessions.postgres'
 import { verifyPassword } from '@/server/runtime/password-hasher'
 import {
+  getAdminCustomer,
+  getAdminOrder,
+  listAdminCustomers,
+  listAdminOrders,
+  refundAdminOrder,
+  updateAdminOrderStatus,
+  type AdminCustomerDetail,
+  type AdminCustomerListItem,
+  type AdminOrderDetail,
+  type AdminOrderListItem,
+} from '@/server/services/admin/orders-admin'
+import {
   createPostgresSessionsRepository,
   resolveSessionSecret,
 } from '@/server/db/repositories/sessions.postgres'
@@ -239,6 +251,89 @@ export const adminListAudit = createServerFn({ method: 'GET' })
   )
   .handler(async ({ data }): Promise<AuditListItem[]> => listAuditEntries(await currentActor(), data))
 
+// ─── Pedidos ────────────────────────────────────────────────────────────────
+
+const orderStatusSchema = z.enum([
+  'draft',
+  'placed',
+  'paid',
+  'fulfilled',
+  'cancelled',
+  'refunded',
+])
+
+export const adminListOrders = createServerFn({ method: 'GET' })
+  .validator(
+    z.object({
+      status: orderStatusSchema.optional(),
+      q: z.string().trim().max(120).optional(),
+      /** ISO date; el rango se acota para no barrer la tabla entera. */
+      from: z.string().datetime().optional(),
+      to: z.string().datetime().optional(),
+      cursor: z.string().optional().nullable(),
+      size: z.number().int().min(1).max(100).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ items: AdminOrderListItem[]; nextCursor: string | null; hasMore: boolean }> => {
+    const page = await listAdminOrders(await currentActor(), {
+      ...data,
+      from: data.from ? new Date(data.from) : undefined,
+      to: data.to ? new Date(data.to) : undefined,
+    })
+    return { items: [...page.items], nextCursor: page.nextCursor, hasMore: page.hasMore }
+  })
+
+export const adminGetOrder = createServerFn({ method: 'GET' })
+  .validator(z.object({ id: z.string().uuid() }))
+  .handler(async ({ data }): Promise<AdminOrderDetail> =>
+    getAdminOrder(await currentActor(), data.id),
+  )
+
+export const adminUpdateOrderStatus = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      id: z.string().uuid(),
+      to: orderStatusSchema,
+      note: z.string().trim().max(300).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ from: string; to: string }> =>
+    updateAdminOrderStatus(await currentActor(), data),
+  )
+
+export const adminRefundOrder = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      id: z.string().uuid(),
+      amountCents: z.number().int().positive(),
+      reason: z.string().trim().min(3).max(300),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ refundedCents: number; status: string }> =>
+    refundAdminOrder(await currentActor(), data),
+  )
+
+// ─── Clientes ───────────────────────────────────────────────────────────────
+
+export const adminListCustomers = createServerFn({ method: 'GET' })
+  .validator(
+    z.object({
+      q: z.string().trim().max(120).optional(),
+      cursor: z.string().optional().nullable(),
+      size: z.number().int().min(1).max(100).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ items: AdminCustomerListItem[]; nextCursor: string | null; hasMore: boolean }> => {
+    const page = await listAdminCustomers(await currentActor(), data)
+    return { items: [...page.items], nextCursor: page.nextCursor, hasMore: page.hasMore }
+  })
+
+export const adminGetCustomer = createServerFn({ method: 'GET' })
+  .validator(z.object({ id: z.string().uuid() }))
+  .handler(async ({ data }): Promise<AdminCustomerDetail> =>
+    getAdminCustomer(await currentActor(), data.id),
+  )
+
 /** DTOs para el cliente (solo tipos: se borran al compilar). */
 export type { AdminActor } from '@/server/services/admin/actor'
 export type {
@@ -247,3 +342,9 @@ export type {
   AuditListItem,
   DashboardKpis,
 } from '@/server/services/admin/catalog-admin'
+export type {
+  AdminCustomerDetail,
+  AdminCustomerListItem,
+  AdminOrderDetail,
+  AdminOrderListItem,
+} from '@/server/services/admin/orders-admin'
