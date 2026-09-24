@@ -154,6 +154,40 @@ def main():
             check("5e. clientes explica el régimen de PII aplicado", True)
         except Exception as exc:  # noqa: BLE001
             check("5e. clientes explica el régimen de PII aplicado", False, str(exc)[:140])
+        # ── 5f/5g/5h. Ajustes, contenido y usuarios ──────────────────────────
+        try:
+            page.goto(f"{BASE}/admin/settings", wait_until="domcontentloaded")
+            page.wait_for_selector("main :text('Ajustes')", timeout=15_000)
+            page.wait_for_timeout(800)
+            settings_text = page.inner_text("main").upper()
+            check(
+                "5f. los ajustes del sitio se listan",
+                "AJUSTES" in settings_text and ("CLAVE" in settings_text or "NO HAY AJUSTES" in settings_text),
+                settings_text[:120],
+            )
+        except Exception as exc:  # noqa: BLE001
+            check("5f. los ajustes del sitio se listan", False, str(exc)[:140])
+
+        try:
+            page.goto(f"{BASE}/admin/content", wait_until="domcontentloaded")
+            page.wait_for_selector("main :text('Nuevo contenido')", timeout=15_000)
+            check("5g. la gestión de contenido está operativa", True)
+        except Exception as exc:  # noqa: BLE001
+            check("5g. la gestión de contenido está operativa", False, str(exc)[:140])
+
+        try:
+            page.goto(f"{BASE}/admin/users", wait_until="domcontentloaded")
+            page.wait_for_selector("main", timeout=15_000)
+            page.wait_for_timeout(1_200)
+            users_text = page.inner_text("main")
+            # El rol `admin` NO tiene users:manage: la pantalla debe negarse.
+            check(
+                "5h. usuarios exige users:manage (el rol admin no lo tiene)",
+                "users:manage" in users_text or "No se pudieron cargar" in users_text,
+                users_text[:120],
+            )
+        except Exception as exc:  # noqa: BLE001
+            check("5h. usuarios exige users:manage (el rol admin no lo tiene)", False, str(exc)[:140])
         # ── 6. RBAC en la interfaz: `admin` no lee auditoría ─────────────────
         page.goto(f"{BASE}/admin/audit", wait_until="networkidle")
         audit = page.inner_text("main")

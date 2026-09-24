@@ -37,6 +37,19 @@ import {
   type AuditListItem,
   type DashboardKpis,
 } from '@/server/services/admin/catalog-admin'
+import {
+  assignAdminRole,
+  listAdminContent,
+  listAdminRoles,
+  listAdminSettings,
+  listAdminUsers,
+  revokeAdminRole,
+  updateAdminSetting,
+  upsertAdminContent,
+  type AdminContentRow,
+  type AdminSettingRow,
+  type AdminUserRow,
+} from '@/server/services/admin/content-admin'
 import { findActiveUserByEmail } from '@/server/db/repositories/sessions.postgres'
 import { verifyPassword } from '@/server/runtime/password-hasher'
 import {
@@ -402,6 +415,80 @@ export const adminUpsertCategory = createServerFn({ method: 'POST' })
     upsertAdminCategory(await currentActor(), data),
   )
 
+// ─── Ajustes, contenido y usuarios ──────────────────────────────────────────
+
+export const adminListSettings = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<AdminSettingRow[]> => listAdminSettings(await currentActor()),
+)
+
+export const adminUpdateSetting = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      key: z.string().trim().min(2).max(60),
+      value: z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+      ]),
+      type: z.enum(['string', 'number', 'boolean', 'json']).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<AdminSettingRow> =>
+    updateAdminSetting(await currentActor(), {
+      key: data.key,
+      value: data.value,
+      type: data.type,
+    }),
+  )
+
+export const adminListContent = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<AdminContentRow[]> => listAdminContent(await currentActor()),
+)
+
+const contentSchema = z.object({
+  kind: z.enum(['section', 'banner']),
+  id: z.string().uuid().optional(),
+  key: z
+    .string()
+    .trim()
+    .min(2)
+    .max(60)
+    .regex(/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/, 'La clave solo admite minúsculas, números y guiones'),
+  title: z.string().trim().max(120).nullable().optional(),
+  subtitle: z.string().trim().max(240).nullable().optional(),
+  ctaLabel: z.string().trim().max(40).nullable().optional(),
+  ctaHref: z.string().trim().max(300).nullable().optional(),
+  placement: z.enum(['home', 'home_hero', 'shop', 'checkout']).optional(),
+  position: z.number().int().min(0).max(9_999).optional(),
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+})
+
+export const adminUpsertContent = createServerFn({ method: 'POST' })
+  .validator(contentSchema)
+  .handler(async ({ data }): Promise<{ id: string; created: boolean }> =>
+    upsertAdminContent(await currentActor(), data),
+  )
+
+export const adminListUsers = createServerFn({ method: 'GET' })
+  .validator(z.object({ q: z.string().trim().max(120).optional() }))
+  .handler(async ({ data }): Promise<AdminUserRow[]> =>
+    listAdminUsers(await currentActor(), data),
+  )
+
+export const adminListRoles = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<Array<{ key: string; name: string; permissionCount: number }>> =>
+    listAdminRoles(await currentActor()),
+)
+
+export const adminAssignRole = createServerFn({ method: 'POST' })
+  .validator(z.object({ userId: z.string().uuid(), roleKey: z.string().trim().min(2).max(40) }))
+  .handler(async ({ data }): Promise<{ ok: true }> => assignAdminRole(await currentActor(), data))
+
+export const adminRevokeRole = createServerFn({ method: 'POST' })
+  .validator(z.object({ userId: z.string().uuid(), roleKey: z.string().trim().min(2).max(40) }))
+  .handler(async ({ data }): Promise<{ ok: true }> => revokeAdminRole(await currentActor(), data))
+
 /** DTOs para el cliente (solo tipos: se borran al compilar). */
 export type { AdminActor } from '@/server/services/admin/actor'
 export type {
@@ -413,6 +500,12 @@ export type {
   AuditListItem,
   DashboardKpis,
 } from '@/server/services/admin/catalog-admin'
+export type {
+  AdminContentRow,
+  AdminSettingRow,
+  AdminUserRow,
+  SettingType,
+} from '@/server/services/admin/content-admin'
 export type {
   AdminCustomerDetail,
   AdminCustomerListItem,

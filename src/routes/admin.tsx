@@ -32,6 +32,9 @@ const NAV = [
   { to: '/admin/orders', label: 'Pedidos', exact: false },
   { to: '/admin/customers', label: 'Clientes', exact: false },
   { to: '/admin/inventory', label: 'Inventario', exact: false },
+  { to: '/admin/content', label: 'Contenido', exact: false },
+  { to: '/admin/settings', label: 'Ajustes', exact: false },
+  { to: '/admin/users', label: 'Usuarios', exact: false },
   { to: '/admin/audit', label: 'Auditoría', exact: false },
 ] as const
 
