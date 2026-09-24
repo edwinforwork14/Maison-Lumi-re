@@ -12,7 +12,7 @@ function product(overrides: Partial<ProductLike>): ProductLike {
     name: 'Pieza',
     description: 'Descripción',
     category: 'bags',
-    price: 100,
+    priceCents: 10_000,
     colors: ['Negro'],
     materials: ['Cuero'],
     featured: false,
@@ -24,18 +24,18 @@ function product(overrides: Partial<ProductLike>): ProductLike {
 
 const source = {
   products: [
-    product({ name: 'Bolso Ámbar', price: 300, featured: true }),
-    product({ name: 'Bolso Bruma', price: 150, bestseller: true }),
+    product({ name: 'Bolso Ámbar', priceCents: 30_000, featured: true }),
+    product({ name: 'Bolso Bruma', priceCents: 15_000, bestseller: true }),
     product({
       name: 'Gafas Sol',
-      price: 220,
+      priceCents: 22_000,
       category: 'eyewear',
       materials: ['Acetato'],
       isNew: true,
     }),
     product({
       name: 'Bufón Seda',
-      price: 90,
+      priceCents: 9_000,
       category: 'accessories',
       colors: ['Marfil'],
       materials: ['Seda'],
@@ -59,7 +59,7 @@ describe('catalog: filtrado', () => {
     const mat = queryProductsFrom(source, { materials: ['Cuero'] })
     assert.equal(mat.length, 2)
 
-    const price = queryProductsFrom(source, { priceMin: 150, priceMax: 300 })
+    const price = queryProductsFrom(source, { priceMinCents: 15_000, priceMaxCents: 30_000 })
     assert.equal(price.length, 3)
   })
 
@@ -78,7 +78,7 @@ describe('catalog: filtrado', () => {
   it('combina filtros', () => {
     const combined = queryProductsFrom(source, {
       category: 'bags',
-      priceMax: 200,
+      priceMaxCents: 20_000,
     })
     assert.equal(combined.length, 1)
     assert.equal(combined[0]?.name, 'Bolso Bruma')
@@ -94,9 +94,9 @@ describe('catalog: ordenado (una sola pasada, defecto D3)', () => {
 
   it('price-asc y price-desc', () => {
     const asc = sortProducts(source.products, 'price-asc')
-    assert.equal(asc[0]?.price, 90)
+    assert.equal(asc[0]?.priceCents, 9_000)
     const desc = sortProducts(source.products, 'price-desc')
-    assert.equal(desc[0]?.price, 300)
+    assert.equal(desc[0]?.priceCents, 30_000)
   })
 
   it('new y bestsellers', () => {
@@ -109,7 +109,7 @@ describe('catalog: ordenado (una sola pasada, defecto D3)', () => {
 
   it('queryProductsFrom ya devuelve la lista ordenada según filters.sort', () => {
     const sorted = queryProductsFrom(source, { sort: 'price-asc' })
-    const prices = sorted.map((p) => p.price)
+    const prices = sorted.map((p) => p.priceCents)
     assert.deepEqual(
       prices,
       [...prices].sort((a, b) => a - b),

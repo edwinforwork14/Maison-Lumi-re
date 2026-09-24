@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useStore } from '@/lib/store'
 import { registerFn } from '@/features/commerce.api'
 
 export const Route = createFileRoute('/register')({
@@ -9,7 +8,6 @@ export const Route = createFileRoute('/register')({
 })
 
 function RegisterPage() {
-  const { login } = useStore()
   const navigate = useNavigate()
   const [form, setForm] = useState({
     firstName: '',
@@ -41,8 +39,9 @@ function RegisterPage() {
     setSubmitting(true)
     setError('')
     try {
-      const user = await registerFn({ data: form })
-      login(user)
+      // La identidad la fija el servidor (cookie httpOnly): el cliente no
+      // guarda ningún dato personal (defecto D6).
+      await registerFn({ data: form })
       navigate({ to: '/account' })
     } catch (err) {
       setError(
@@ -58,7 +57,7 @@ function RegisterPage() {
   return (
     <div className="mx-auto grid min-h-[70vh] max-w-md animate-fade-in flex-col justify-center px-4 py-20">
       <div className="text-center">
-        <p className="mb-2 text-[11px] uppercase tracking-[0.3em] text-taupe">
+        <p className="mb-2 label-wide tracking-[0.3em] text-taupe">
           Nueva clienta · Nuevo cliente
         </p>
         <h1 className="mb-10 font-serif text-3xl font-light">Crear cuenta</h1>
@@ -95,7 +94,7 @@ function RegisterPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:bg-clay"
+          className="btn btn-solid btn-block label-wide disabled:cursor-not-allowed disabled:bg-clay"
         >
           {submitting ? 'Creando…' : 'Crear cuenta'}
         </button>

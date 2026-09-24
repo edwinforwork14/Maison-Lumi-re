@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useStore } from '@/lib/store'
 import { loginFn } from '@/features/commerce.api'
 
 export const Route = createFileRoute('/login')({
@@ -9,7 +8,6 @@ export const Route = createFileRoute('/login')({
 })
 
 function LoginPage() {
-  const { login } = useStore()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,8 +27,9 @@ function LoginPage() {
     setSubmitting(true)
     setError('')
     try {
-      const user = await loginFn({ data: { email, password } })
-      login(user)
+      // La identidad la fija el servidor (cookie httpOnly): el cliente no
+      // guarda ningún dato personal (defecto D6).
+      await loginFn({ data: { email, password } })
       navigate({ to: '/account' })
     } catch (err) {
       setError(
@@ -46,7 +45,7 @@ function LoginPage() {
   return (
     <div className="mx-auto grid min-h-[70vh] max-w-md animate-fade-in flex-col justify-center px-4 py-20">
       <div className="text-center">
-        <p className="mb-2 text-[11px] uppercase tracking-[0.3em] text-taupe">
+        <p className="mb-2 label-wide tracking-[0.3em] text-taupe">
           Cliente registrado
         </p>
         <h1 className="mb-10 font-serif text-3xl font-light">Iniciar sesión</h1>
@@ -71,7 +70,7 @@ function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:bg-clay"
+          className="btn btn-solid btn-block label-wide disabled:cursor-not-allowed disabled:bg-clay"
         >
           {submitting ? 'Entrando…' : 'Entrar'}
         </button>

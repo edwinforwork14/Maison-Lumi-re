@@ -79,7 +79,7 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
         }`}
       >
         <header className="flex items-center justify-between border-b border-linen px-6 py-5">
-          <h2 className="text-xs uppercase tracking-[0.25em]">{title}</h2>
+          <h2 className="label-sm-wide">{title}</h2>
           <button
             type="button"
             onClick={onClose}

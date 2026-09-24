@@ -22,7 +22,7 @@ export function Header() {
         }}
       >
         {/* Barra superior editorial */}
-        <div className="hidden bg-sand px-8 py-2 text-center text-[10px] uppercase tracking-[0.25em] text-taupe md:block">
+        <div className="hidden bg-sand px-8 py-2 text-center label-xs-wide text-taupe md:block">
           Envío gratuito a partir de 500 € · Devoluciones extendidas 30 días
         </div>
 
@@ -48,7 +48,7 @@ export function Header() {
                   onMouseEnter={() => setOpenNav(section)}
                   onFocus={() => setOpenNav(section)}
                   aria-expanded={openNav?.label === section.label}
-                  className={`py-2 text-[11px] uppercase tracking-[0.2em] transition-colors ${
+                  className={`py-2 label transition-colors ${
                     openNav?.label === section.label
                       ? 'text-ink'
                       : 'text-charcoal hover:text-taupe'

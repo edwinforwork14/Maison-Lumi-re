@@ -18,7 +18,8 @@ export interface ProductLike {
   name: string
   description: string
   category: string
-  price: number
+  /** Precio en céntimos (unidades menores), nunca euros decimales. */
+  priceCents: number
   colors: string[]
   materials: string[]
   featured: boolean
@@ -31,8 +32,10 @@ export interface CatalogFilters {
   collection?: string
   colors?: string[]
   materials?: string[]
-  priceMin?: number
-  priceMax?: number
+  /** Cota inferior del precio, en céntimos. */
+  priceMinCents?: number
+  /** Cota superior del precio, en céntimos. */
+  priceMaxCents?: number
   sort?: SortId
   search?: string
 }
@@ -49,9 +52,9 @@ export function sortProducts<T extends ProductLike>(
   const sorted = [...list]
   switch (sort) {
     case 'price-asc':
-      return sorted.sort((a, b) => a.price - b.price)
+      return sorted.sort((a, b) => a.priceCents - b.priceCents)
     case 'price-desc':
-      return sorted.sort((a, b) => b.price - a.price)
+      return sorted.sort((a, b) => b.priceCents - a.priceCents)
     case 'bestsellers':
       return sorted.sort((a, b) => Number(b.bestseller) - Number(a.bestseller))
     case 'new':
@@ -85,11 +88,11 @@ export function queryProductsFrom(
     const wanted = filters.materials
     list = list.filter((p) => p.materials.some((m) => wanted.includes(m)))
   }
-  if (filters.priceMin != null) {
-    list = list.filter((p) => p.price >= filters.priceMin!)
+  if (filters.priceMinCents != null) {
+    list = list.filter((p) => p.priceCents >= filters.priceMinCents!)
   }
-  if (filters.priceMax != null) {
-    list = list.filter((p) => p.price <= filters.priceMax!)
+  if (filters.priceMaxCents != null) {
+    list = list.filter((p) => p.priceCents <= filters.priceMaxCents!)
   }
   if (filters.search) {
     const q = filters.search.toLowerCase().trim()

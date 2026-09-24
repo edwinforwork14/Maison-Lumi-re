@@ -6,6 +6,7 @@ import {
   useNavigate,
 } from '@tanstack/react-router'
 import { listProducts, listCategories, listCollections, listFacets } from '@/features/commerce.api'
+import { centsOfMajor } from '@/lib/money-format'
 import type { SortId } from '@/domain/catalog'
 import { ProductGrid } from '@/components/product/ProductGrid'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -138,8 +139,9 @@ function ShopPage() {
           collection: search.collection,
           colors: asArray(search.color),
           materials: asArray(search.material),
-          priceMin: search.priceMin,
-          priceMax: search.priceMax,
+          // La URL viaja en euros (legible y canónica); la API habla céntimos.
+          priceMinCents: centsOfMajor(search.priceMin),
+          priceMaxCents: centsOfMajor(search.priceMax),
           sort: search.sort,
         },
       }),
@@ -310,7 +312,7 @@ function ShopPage() {
       {/* Encabezado editorial */}
       <header className="border-b border-linen bg-sand px-4 py-14 md:px-8 md:py-20">
         <div className="mx-auto max-w-7xl">
-          <p className="mb-2 text-[11px] uppercase tracking-[0.3em] text-taupe">
+          <p className="mb-2 label-wide tracking-[0.3em] text-taupe">
             Tienda
           </p>
           <h1 className="mb-3 font-serif text-4xl font-light md:text-5xl">
@@ -331,7 +333,7 @@ function ShopPage() {
             <button
               type="button"
               onClick={() => setFiltersOpen((v) => !v)}
-              className="text-[11px] uppercase tracking-[0.2em] lg:hidden"
+              className="label lg:hidden"
             >
               Filtros {activeFilterCount > 0 && `(${activeFilterCount})`}
             </button>
@@ -341,12 +343,12 @@ function ShopPage() {
             </p>
           </div>
 
-          <label className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em]">
+          <label className="flex items-center gap-2 label">
             <span className="text-taupe">Ordenar por</span>
             <select
               value={search.sort ?? 'recommended'}
               onChange={(e) => setParam({ sort: e.target.value as SortId })}
-              className="border-none bg-transparent py-1 pr-2 text-[11px] uppercase tracking-[0.2em] outline-none"
+              className="border-none bg-transparent py-1 pr-2 label outline-none"
             >
               {sorts.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -367,7 +369,7 @@ function ShopPage() {
           {filtersOpen && (
             <aside className="fixed inset-0 z-50 overflow-y-auto bg-ivory p-6 lg:hidden">
               <div className="mb-8 flex items-center justify-between">
-                <span className="text-xs uppercase tracking-[0.25em]">
+                <span className="label-sm-wide">
                   Filtros
                 </span>
                 <button
@@ -383,7 +385,7 @@ function ShopPage() {
               <button
                 type="button"
                 onClick={() => setFiltersOpen(false)}
-                className="mt-10 w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory"
+                className="mt-10 w-full bg-ink py-4 label-wide text-ivory"
               >
                 Ver {products.length} piezas
               </button>
@@ -416,7 +418,7 @@ function FilterGroup({
 }) {
   return (
     <section>
-      <h3 className="mb-4 text-[11px] uppercase tracking-[0.25em] text-taupe">
+      <h3 className="mb-4 eyebrow">
         {title}
       </h3>
       {children}

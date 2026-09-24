@@ -17,7 +17,7 @@ function WishlistPage() {
     queryKey: ['wishlist-products', wishlist],
     queryFn: () =>
       wishlist.length > 0
-        ? listProductsByIds({ data: { ids: wishlist } })
+        ? listProductsByIds({ data: { ids: [...wishlist] } })
         : Promise.resolve([]),
     enabled: wishlist.length > 0,
   })

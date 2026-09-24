@@ -1,8 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+  useRouter,
+} from '@tanstack/react-router'
 import { useStore } from '@/lib/store'
-import { formatPrice } from '@/lib/format'
-import { getSession, listMyOrders } from '@/features/commerce.api'
+import { formatMoney } from '@/lib/money-format'
+import { getSession, listMyOrders, logoutFn } from '@/features/commerce.api'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 export const Route = createFileRoute('/account')({
@@ -18,11 +24,17 @@ export const Route = createFileRoute('/account')({
   component: AccountPage,
 })
 
+/**
+ * Área de cliente. La identidad procede **solo** de la sesión de servidor
+ * (cookie httpOnly); el cliente no guarda ningún dato personal (defecto D6).
+ */
 function AccountPage() {
   const { user } = Route.useRouteContext()
-  const { logout, wishlist } = useStore()
+  const { wishlist } = useStore()
+  const navigate = useNavigate()
+  const router = useRouter()
 
-  const { data: orders = [] } = useQuery({
+  const { data: orders, isPending } = useQuery({
     queryKey: ['my-orders', user.email],
     queryFn: () => listMyOrders({ data: { email: user.email } }),
   })
@@ -31,9 +43,7 @@ function AccountPage() {
     <div className="mx-auto max-w-4xl animate-fade-in px-4 py-14 md:px-8 md:py-20">
       <div className="mb-12 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-2 text-[11px] uppercase tracking-[0.3em] text-taupe">
-            Mi cuenta
-          </p>
+          <p className="mb-2 label-wide tracking-[0.3em] text-taupe">Mi cuenta</p>
           <h1 className="font-serif text-4xl font-light">
             {user.firstName} {user.lastName}
           </h1>
@@ -42,11 +52,17 @@ function AccountPage() {
         <button
           type="button"
           onClick={async () => {
-            await logoutFnSafe()
-            logout()
-            window.location.href = '/'
+            try {
+              await logoutFn()
+            } finally {
+              // La sesión vive en el servidor: se invalida el árbol de rutas
+              // (para que los guards vuelvan a resolver) y se navega sin
+              // recargar la página por completo.
+              await router.invalidate()
+              await navigate({ to: '/' })
+            }
           }}
-          className="text-[11px] uppercase tracking-[0.2em] text-taupe underline-offset-4 hover:text-ink hover:underline"
+          className="label text-taupe underline-offset-4 hover:text-ink hover:underline"
         >
           Cerrar sesión
         </button>
@@ -54,10 +70,13 @@ function AccountPage() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <section className="border border-linen p-8">
-          <h2 className="mb-3 text-[11px] uppercase tracking-[0.25em] text-taupe">
-            Pedidos
-          </h2>
-          {orders.length === 0 ? (
+          <h2 className="mb-3 eyebrow">Pedidos</h2>
+          {isPending ? (
+            <div aria-busy="true" className="space-y-3">
+              <p className="text-sm text-taupe">Cargando sus pedidos…</p>
+              <div className="skeleton h-12 w-full" />
+            </div>
+          ) : (orders?.length ?? 0) === 0 ? (
             <>
               <p className="mb-6 text-sm text-taupe">
                 Sus pedidos aparecerán aquí después de la primera compra.
@@ -70,7 +89,7 @@ function AccountPage() {
             </>
           ) : (
             <ul className="divide-y divide-linen">
-              {orders.map((order) => (
+              {(orders ?? []).map((order) => (
                 <li key={order.number} className="py-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -82,7 +101,7 @@ function AccountPage() {
                       </p>
                     </div>
                     <span className="text-sm tabular-nums">
-                      {formatPrice(order.total)}
+                      {formatMoney(order.total)}
                     </span>
                   </div>
                 </li>
@@ -92,19 +111,14 @@ function AccountPage() {
         </section>
 
         <section className="border border-linen p-8">
-          <h2 className="mb-3 text-[11px] uppercase tracking-[0.25em] text-taupe">
-            Wishlist
-          </h2>
+          <h2 className="mb-3 eyebrow">Wishlist</h2>
           {wishlist.length > 0 ? (
             <>
               <p className="mb-6 text-sm text-taupe">
                 Tiene {wishlist.length}{' '}
                 {wishlist.length === 1 ? 'pieza guardada' : 'piezas guardadas'}.
               </p>
-              <Link
-                to="/wishlist"
-                className="inline-block border border-ink px-6 py-3 text-[11px] uppercase tracking-[0.2em] transition-colors hover:bg-ink hover:text-ivory"
-              >
+              <Link to="/wishlist" className="btn btn-outline px-6 py-3 label">
                 Ver wishlist
               </Link>
             </>
@@ -119,13 +133,4 @@ function AccountPage() {
       </div>
     </div>
   )
-}
-
-async function logoutFnSafe(): Promise<void> {
-  const { logoutFn } = await import('@/features/commerce.api')
-  try {
-    await logoutFn()
-  } catch {
-    // la sesión local se limpia igualmente
-  }
 }

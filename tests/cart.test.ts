@@ -3,7 +3,8 @@ import { describe, it } from 'node:test'
 import {
   cartReducer,
   cartCount,
-  cartSubtotal,
+  clampQuantity,
+  initialQuantity,
   type CartLine,
 } from '../src/domain/cart/cart-reducer.ts'
 
@@ -45,28 +46,32 @@ describe('cart: reducer', () => {
   })
 })
 
-describe('cart: selectores', () => {
-  const catalog = new Map([
-    ['p1', { id: 'p1', price: 100 }],
-    ['p2', { id: 'p2', price: 50 }],
-  ])
-  const find = (id: string) => catalog.get(id)
-
+describe('cart: selectores (sin aritmética de dinero, defecto D5)', () => {
   it('cartCount suma unidades', () => {
     assert.equal(cartCount(seed), 2)
     assert.equal(cartCount([]), 0)
   })
 
-  it('cartSubtotal ignora productos retirados y suma los válidos', () => {
-    const state: CartLine[] = [
-      { productId: 'p1', color: 'Negro', quantity: 2 },
-      { productId: 'gone', color: '-', quantity: 5 },
-      { productId: 'p2', color: 'X', quantity: 1 },
-    ]
-    assert.equal(cartSubtotal(state, find), 250)
+  it('el reducer no conoce ningún importe: las líneas solo llevan cantidad', () => {
+    const next = cartReducer([], { type: 'add', productId: 'p9', color: 'Beige', quantity: 4 })
+    assert.deepEqual(Object.keys(next[0]!).sort(), ['color', 'productId', 'quantity'])
+  })
+})
+
+describe('cart: tope por stock del SKU (defecto D18)', () => {
+  it('clampQuantity nunca supera el stock disponible', () => {
+    assert.equal(clampQuantity(5, 3), 3)
+    assert.equal(clampQuantity(2, 30), 2)
   })
 
-  it('cartSubtotal de carrito vacío es 0', () => {
-    assert.equal(cartSubtotal([], find), 0)
+  it('clampQuantity no admite negativos ni decimales', () => {
+    assert.equal(clampQuantity(-4, 10), 0)
+    assert.equal(clampQuantity(2.7, 10), 2)
+    assert.equal(clampQuantity(3, 0), 0)
+  })
+
+  it('initialQuantity no ofrece unidades cuando no hay stock', () => {
+    assert.equal(initialQuantity(0), 0)
+    assert.equal(initialQuantity(7), 1)
   })
 })

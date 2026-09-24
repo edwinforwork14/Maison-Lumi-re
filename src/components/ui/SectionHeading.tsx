@@ -17,7 +17,7 @@ export function SectionHeading({ eyebrow, title, action }: SectionHeadingProps) 
       {action && (
         <Link
           {...action.linkProps}
-          className="hidden shrink-0 text-[11px] uppercase tracking-[0.2em] underline-offset-4 hover:underline md:block"
+          className="hidden shrink-0 label underline-offset-4 hover:underline md:block"
         >
           {action.label} →
         </Link>

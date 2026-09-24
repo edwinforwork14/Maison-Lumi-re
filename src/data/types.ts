@@ -1,13 +1,18 @@
-// Tipos del dominio del e-commerce.
-// Cuando se conecte una API real, estas interfaces siguen siendo el contrato.
+// Tipos legacy del catálogo (migración strangler: destino `domain/*/types.ts`).
+//
+// REGLA DE DINERO: todo importe es un entero en **céntimos** (`priceCents`),
+// nunca euros decimales. El formateo es responsabilidad de `lib/money-format`
+// y la aritmética de `domain/money` (defectos D17/D21).
 
 export interface Product {
   id: string
   name: string
   slug: string
   description: string
-  price: number
-  compareAtPrice?: number
+  /** Precio en céntimos. */
+  priceCents: number
+  /** Precio tachado en céntimos, si lo hay. */
+  compareAtPriceCents?: number
   category: CategoryId
   collection: CollectionId
   colors: string[]
@@ -19,9 +24,14 @@ export interface Product {
   isNew: boolean
 }
 
-export type CategoryId = 'eyewear' | 'bags' | 'shoes' | 'accessories'
-
-export type CollectionId = 'atelier' | 'lumiere' | 'nocturne'
+/**
+ * Los identificadores de categoría y colección son **datos**
+ * (`data/categories.ts`, `data/collections.ts`), no un union literal en el tipo
+ * (defecto D15): añadir una categoría no obliga a tocar código.
+ * La integridad referencial la garantiza `tests/seeds.test.ts`.
+ */
+export type CategoryId = string
+export type CollectionId = string
 
 export interface Category {
   id: CategoryId
@@ -36,58 +46,4 @@ export interface Collection {
   name: string
   slug: string
   description: string
-}
-
-export interface CartItem {
-  productId: string
-  color: string
-  quantity: number
-}
-
-export interface CartLine {
-  product: Product
-  color: string
-  quantity: number
-  lineTotal: number
-}
-
-export interface CartTotals {
-  lines: CartLine[]
-  subtotal: number
-  shipping: number
-  total: number
-}
-
-export interface Order {
-  number: string
-  createdAt: string
-  items: CartLine[]
-  totals: Pick<CartTotals, 'subtotal' | 'shipping' | 'total'>
-  customer: OrderCustomer
-  shippingMethod: ShippingMethodId
-}
-
-export interface OrderCustomer {
-  firstName: string
-  lastName: string
-  email: string
-  address: string
-  city: string
-  postalCode: string
-  country: string
-}
-
-export type ShippingMethodId = 'standard' | 'express'
-
-export interface ShippingMethod {
-  id: ShippingMethodId
-  name: string
-  description: string
-  price: number
-}
-
-export interface UserAccount {
-  firstName: string
-  lastName: string
-  email: string
 }

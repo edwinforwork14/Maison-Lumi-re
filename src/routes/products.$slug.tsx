@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-router'
 import { getProductBySlug, listRelatedProducts, listCategories } from '@/features/commerce.api'
 import type { Product } from '@/data/types'
-import { formatPrice } from '@/lib/format'
+import { formatCents } from '@/lib/money-format'
 import { useStore } from '@/lib/store'
 import { QuantitySelector } from '@/components/ui/QuantitySelector'
 import { ProductGrid } from '@/components/product/ProductGrid'
@@ -68,7 +68,7 @@ function ProductDetail() {
     <div className="animate-fade-in">
       {/* Breadcrumb */}
       <nav
-        className="mx-auto max-w-7xl px-4 py-6 text-[11px] uppercase tracking-[0.2em] text-taupe md:px-8"
+        className="mx-auto max-w-7xl px-4 py-6 label text-taupe md:px-8"
         aria-label="Miga de pan"
       >
         <Link to="/" className="hover:text-ink">Inicio</Link>
@@ -131,12 +131,12 @@ function ProductDetail() {
           </h1>
 
           <p className="mb-6 flex items-baseline gap-3">
-            <span className={`text-lg ${product.compareAtPrice ? 'text-gold' : ''}`}>
-              {formatPrice(product.price)}
+            <span className={`text-lg ${product.compareAtPriceCents ? 'text-gold' : ''}`}>
+              {formatCents(product.priceCents)}
             </span>
-            {product.compareAtPrice && (
+            {product.compareAtPriceCents && (
               <span className="text-sm text-clay line-through">
-                {formatPrice(product.compareAtPrice)}
+                {formatCents(product.compareAtPriceCents)}
               </span>
             )}
           </p>
@@ -160,7 +160,7 @@ function ProductDetail() {
                     setQuantity(1)
                   }}
                   disabled={v.stock === 0}
-                  className={`border px-5 py-2.5 text-xs uppercase tracking-[0.15em] transition-colors disabled:cursor-not-allowed disabled:text-clay disabled:line-through ${
+                  className={`border px-5 py-2.5 label-sm tracking-[0.15em] transition-colors disabled:cursor-not-allowed disabled:text-clay disabled:line-through ${
                     color === v.color
                       ? 'border-ink bg-ink text-ivory'
                       : 'border-linen hover:border-clay'
@@ -179,7 +179,7 @@ function ProductDetail() {
             <QuantitySelector
               value={quantity}
               onChange={setQuantity}
-              max={Math.max(1, Math.min(10, variantStock))}
+              max={Math.max(1, variantStock)}
             />
             <span className="text-xs text-taupe" role="status">
               {soldOut
@@ -193,8 +193,8 @@ function ProductDetail() {
           <button
             type="button"
             disabled={soldOut}
-            onClick={() => addToCart(product as Product, color, quantity)}
-            className="mb-4 w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:bg-clay"
+            onClick={() => addToCart(product.id, color, quantity)}
+            className="mb-4 btn btn-solid btn-block label-wide disabled:cursor-not-allowed disabled:bg-clay"
           >
             {soldOut ? 'Agotado' : 'Añadir al carrito'}
           </button>
@@ -202,7 +202,7 @@ function ProductDetail() {
           <button
             type="button"
             onClick={() => toggleWishlist(product.id)}
-            className="mb-10 w-full border border-ink py-4 text-[11px] uppercase tracking-[0.25em] transition-colors hover:bg-sand"
+            className="mb-10 w-full border border-ink py-4 label-wide transition-colors hover:bg-sand"
           >
             {wishlisted ? '♥ En wishlist' : '♡ Añadir a wishlist'}
           </button>

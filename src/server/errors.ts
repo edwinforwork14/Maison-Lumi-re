@@ -18,10 +18,14 @@ export type ErrorCode =
 
 export class AppError extends Error {
   readonly code: ErrorCode
+  readonly cause?: unknown
 
-  constructor(code: ErrorCode, message: string, readonly cause?: unknown) {
+  // Sin parameter properties: el archivo debe poder ejecutarse con el
+  // type-stripping de Node (`node --test`), que solo admite sintaxis erasable.
+  constructor(code: ErrorCode, message: string, cause?: unknown) {
     super(message)
     this.name = 'AppError'
     this.code = code
+    this.cause = cause
   }
 }

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { Product } from '@/data/types'
-import { formatPrice } from '@/lib/format'
+import { formatCents } from '@/lib/money-format'
 import { useStore } from '@/lib/store'
 import { Badge } from '@/components/ui/Badge'
 
@@ -35,7 +35,7 @@ export function ProductCard({ product }: { product: Product }) {
           {product.bestseller && !soldOut && (
             <Badge kind="bestseller">Bestseller</Badge>
           )}
-          {product.compareAtPrice && !soldOut && (
+          {product.compareAtPriceCents && !soldOut && (
             <Badge kind="sale">Edición limitada</Badge>
           )}
           {soldOut && <Badge kind="out">Agotado</Badge>}
@@ -59,7 +59,7 @@ export function ProductCard({ product }: { product: Product }) {
             <Link
               to="/products/$slug"
               params={{ slug: product.slug }}
-              className="block bg-ivory/95 py-3 text-center text-[11px] uppercase tracking-[0.2em] backdrop-blur transition-colors hover:bg-ink hover:text-ivory"
+              className="block bg-ivory/95 py-3 text-center label backdrop-blur transition-colors hover:bg-ink hover:text-ivory"
             >
               Ver producto
             </Link>
@@ -68,7 +68,7 @@ export function ProductCard({ product }: { product: Product }) {
       </div>
 
       <div className="pt-4">
-        <p className="mb-1 text-[10px] uppercase tracking-[0.2em] text-taupe">
+        <p className="mb-1 label-xs text-taupe">
           {product.colors.join(' · ')}
         </p>
         <Link
@@ -79,12 +79,12 @@ export function ProductCard({ product }: { product: Product }) {
           {product.name}
         </Link>
         <p className="mt-1 flex items-baseline gap-2 text-sm">
-          <span className={product.compareAtPrice ? 'text-gold' : ''}>
-            {formatPrice(product.price)}
+          <span className={product.compareAtPriceCents ? 'text-gold' : ''}>
+            {formatCents(product.priceCents)}
           </span>
-          {product.compareAtPrice && (
+          {product.compareAtPriceCents && (
             <span className="text-xs text-clay line-through">
-              {formatPrice(product.compareAtPrice)}
+              {formatCents(product.compareAtPriceCents)}
             </span>
           )}
         </p>

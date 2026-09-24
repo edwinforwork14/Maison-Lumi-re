@@ -3,8 +3,14 @@ import { Link, type LinkProps } from '@tanstack/react-router'
 interface EmptyStateProps {
   title: string
   message: string
-  /** Enlace tipado (corrige D8: era <a href> sin verificación). */
-  action?: { label: string; linkProps: LinkProps }
+  /** Acción: enlace tipado (corrige D8) o botón con `onClick` (reintentar). */
+  action?: { label: string; linkProps: LinkProps } | { label: string; onClick: () => void }
+}
+
+function isLink(
+  action: NonNullable<EmptyStateProps['action']>,
+): action is { label: string; linkProps: LinkProps } {
+  return 'linkProps' in action
 }
 
 export function EmptyState({ title, message, action }: EmptyStateProps) {
@@ -12,14 +18,20 @@ export function EmptyState({ title, message, action }: EmptyStateProps) {
     <div className="flex flex-col items-center py-24 text-center">
       <p className="mb-3 font-serif text-2xl font-light">{title}</p>
       <p className="mb-8 max-w-sm text-sm text-taupe">{message}</p>
-      {action && (
-        <Link
-          {...action.linkProps}
-          className="border border-ink px-8 py-3 text-[11px] uppercase tracking-[0.2em] transition-colors hover:bg-ink hover:text-ivory"
-        >
-          {action.label}
-        </Link>
-      )}
+      {action &&
+        (isLink(action) ? (
+          <Link {...action.linkProps} className="btn btn-outline px-8 py-3 label">
+            {action.label}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="btn btn-outline px-8 py-3 label"
+          >
+            {action.label}
+          </button>
+        ))}
     </div>
   )
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { listProducts } from '@/features/commerce.api'
-import { formatPrice } from '@/lib/format'
+import { formatCents } from '@/lib/money-format'
 
 /**
  * Búsqueda en servidor (plan.md A2/D9): ya no importa los mocks, consulta
@@ -114,7 +114,7 @@ export function SearchOverlay({
                     />
                   </div>
                   <p className="mt-3 text-sm">{p.name}</p>
-                  <p className="text-sm text-taupe">{formatPrice(p.price)}</p>
+                  <p className="text-sm text-taupe">{formatCents(p.priceCents)}</p>
                 </Link>
               </li>
             ))}

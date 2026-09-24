@@ -89,7 +89,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
 function NotFound() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-32 text-center">
-      <p className="mb-3 text-[11px] uppercase tracking-[0.3em] text-taupe">
+      <p className="mb-3 label-wide tracking-[0.3em] text-taupe">
         Error 404
       </p>
       <h1 className="mb-4 font-serif text-4xl font-light">
@@ -100,7 +100,7 @@ function NotFound() {
       </p>
       <a
         href="/"
-        className="border border-ink px-8 py-3 text-[11px] uppercase tracking-[0.2em] transition-colors hover:bg-ink hover:text-ivory"
+        className="btn btn-outline px-8 py-3 label"
       >
         Volver al inicio
       </a>

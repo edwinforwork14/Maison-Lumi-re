@@ -7,21 +7,50 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { getProductById } from '../data/productLookup'
-import type { CartItem, CartTotals, Product, UserAccount } from '../data/types'
-import { shippingCostFor } from '../data/shipping'
-import { cartReducer, type CartLine } from '@/domain/cart'
+import { z } from 'zod'
+import { cartCount as countLines, cartReducer, type CartLine } from '@/domain/cart'
 
-// ─── Persistencia ────────────────────────────────────────────────────────────
+/**
+ * Estado de cliente del carrito y la wishlist (plan.md §5.4).
+ *
+ * El carrito guarda **solo líneas** (`productId`, `color`, `quantity`): no hay
+ * ningún importe aquí. Los precios, el envío, el descuento y el total son
+ * competencia exclusiva del servidor (`quoteCart`), que es la única fuente de
+ * verdad del dinero (defecto D5).
+ *
+ * La identidad del usuario NO vive aquí: vive en la sesión de servidor
+ * (cookie httpOnly). El cliente nunca persiste datos personales (defecto D6).
+ */
 
-function load<T>(key: string, fallback: T): T {
+// ─── Persistencia versionada y validada (frontera externa ⇒ Zod) ─────────────
+
+const CART_KEY = 'ml.cart.v2'
+const CART_KEY_LEGACY = 'ml.cart.v1'
+const WISH_KEY = 'ml.wishlist.v1'
+
+const cartLineSchema = z.object({
+  productId: z.string().min(1),
+  color: z.string().min(1),
+  quantity: z.number().int().min(1).max(99),
+})
+
+const cartSchema = z.array(cartLineSchema)
+const wishlistSchema = z.array(z.string().min(1))
+
+function load<T>(key: string, schema: z.ZodType<T>, fallback: T, legacyKey?: string): T {
   if (typeof window === 'undefined') return fallback
-  try {
-    const raw = window.localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : fallback
-  } catch {
-    return fallback
+  for (const candidate of legacyKey ? [key, legacyKey] : [key]) {
+    try {
+      const raw = window.localStorage.getItem(candidate)
+      if (!raw) continue
+      const parsed = schema.safeParse(JSON.parse(raw))
+      // Dato corrupto o manipulado: se descarta en lugar de romper la UI.
+      if (parsed.success) return parsed.data
+    } catch {
+      // almacenamiento no disponible (SSR / modo privado): seguir
+    }
   }
+  return fallback
 }
 
 function save(key: string, value: unknown) {
@@ -32,45 +61,30 @@ function save(key: string, value: unknown) {
   }
 }
 
-const toLines = (cart: readonly CartItem[]): CartLine[] =>
-  cart.map((i) => ({ productId: i.productId, color: i.color, quantity: i.quantity }))
-
-const toItems = (lines: readonly CartLine[]): CartItem[] =>
-  lines.map((l) => ({ productId: l.productId, color: l.color, quantity: l.quantity }))
-
-// ─── Carrito ─────────────────────────────────────────────────────────────────
-
-const CART_KEY = 'ml.cart.v1'
-const WISH_KEY = 'ml.wishlist.v1'
-const USER_KEY = 'ml.user.v1'
+// ─── Contexto ───────────────────────────────────────────────────────────────
 
 interface StoreContextValue {
-  cart: CartItem[]
-  cartTotals: CartTotals
+  cart: readonly CartLine[]
   cartCount: number
   cartOpen: boolean
   setCartOpen: (open: boolean) => void
-  addToCart: (product: Product, color: string, quantity?: number) => void
+  addToCart: (productId: string, color: string, quantity?: number) => void
   updateQuantity: (productId: string, color: string, quantity: number) => void
   removeFromCart: (productId: string, color: string) => void
   clearCart: () => void
-  wishlist: string[]
+  wishlist: readonly string[]
   toggleWishlist: (productId: string) => void
   isWishlisted: (productId: string) => boolean
-  user: UserAccount | null
-  login: (user: UserAccount) => void
-  logout: () => void
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [cart, setCart] = useState<CartItem[]>(() => load(CART_KEY, []))
-  const [wishlist, setWishlist] = useState<string[]>(() =>
-    load(WISH_KEY, []),
+  const [cart, setCart] = useState<readonly CartLine[]>(() =>
+    load(CART_KEY, cartSchema, [], CART_KEY_LEGACY),
   )
-  const [user, setUser] = useState<UserAccount | null>(() =>
-    load<UserAccount | null>(USER_KEY, null),
+  const [wishlist, setWishlist] = useState<readonly string[]>(() =>
+    load(WISH_KEY, wishlistSchema, []),
   )
   const [cartOpen, setCartOpen] = useState(false)
   const [hydrated, setHydrated] = useState(false)
@@ -85,49 +99,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (hydrated) save(WISH_KEY, wishlist)
   }, [wishlist, hydrated])
-  useEffect(() => {
-    if (hydrated) save(USER_KEY, user)
-  }, [user, hydrated])
-
-  const cartTotals = useMemo<CartTotals>(() => {
-    const lines = cart
-      .map((item) => {
-        const product = getProductById(item.productId)
-        if (!product) return null
-        return {
-          product,
-          color: item.color,
-          quantity: item.quantity,
-          lineTotal: product.price * item.quantity,
-        }
-      })
-      .filter((l): l is NonNullable<typeof l> => l !== null)
-
-    const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0)
-    // Regla única de envío (domain/pricing vía data/shipping). En Fase 2 el
-    // total pasará a ser autoritativo del servidor (quoteCart) y el cálculo
-    // cliente desaparecerá por completo (defecto D5).
-    const shipping = shippingCostFor('standard', subtotal)
-    return {
-      lines,
-      subtotal,
-      shipping,
-      total: subtotal + shipping,
-    }
-  }, [cart])
 
   const addToCart = useCallback(
-    (product: Product, color: string, quantity = 1) => {
-      setCart((prev) =>
-        toItems(
-          cartReducer(toLines(prev), {
-            type: 'add',
-            productId: product.id,
-            color,
-            quantity,
-          }),
-        ),
-      )
+    (productId: string, color: string, quantity = 1) => {
+      setCart((prev) => cartReducer(prev, { type: 'add', productId, color, quantity }))
       setCartOpen(true)
     },
     [],
@@ -136,23 +111,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateQuantity = useCallback(
     (productId: string, color: string, quantity: number) => {
       setCart((prev) =>
-        toItems(
-          cartReducer(toLines(prev), {
-            type: 'setQuantity',
-            productId,
-            color,
-            quantity,
-          }),
-        ),
+        cartReducer(prev, { type: 'setQuantity', productId, color, quantity }),
       )
     },
     [],
   )
 
   const removeFromCart = useCallback((productId: string, color: string) => {
-    setCart((prev) =>
-      toItems(cartReducer(toLines(prev), { type: 'remove', productId, color })),
-    )
+    setCart((prev) => cartReducer(prev, { type: 'remove', productId, color }))
   }, [])
 
   const clearCart = useCallback(() => setCart([]), [])
@@ -173,8 +139,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<StoreContextValue>(
     () => ({
       cart,
-      cartTotals,
-      cartCount: cart.reduce((n, i) => n + i.quantity, 0),
+      cartCount: countLines(cart),
       cartOpen,
       setCartOpen,
       addToCart,
@@ -184,13 +149,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       wishlist,
       toggleWishlist,
       isWishlisted,
-      user,
-      login: (u) => setUser(u),
-      logout: () => setUser(null),
     }),
     [
       cart,
-      cartTotals,
       cartOpen,
       addToCart,
       updateQuantity,
@@ -199,13 +160,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       wishlist,
       toggleWishlist,
       isWishlisted,
-      user,
     ],
   )
 
-  return (
-    <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
-  )
+  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
 
 export function useStore(): StoreContextValue {

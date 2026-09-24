@@ -63,6 +63,16 @@ export function isZero(m: Money): boolean {
   return m.amount === 0
 }
 
+/** Cero en una moneda (para totales y envío gratuito). */
+export function zero(currency: Currency = 'EUR'): Money {
+  return money(0, currency)
+}
+
+/** Suma de importes homogéneos; lista vacía ⇒ cero. */
+export function sum(items: readonly Money[], currency: Currency = 'EUR'): Money {
+  return items.reduce<Money>((acc, m) => add(acc, m), zero(currency))
+}
+
 export function equals(a: Money, b: Money): boolean {
   return a.currency === b.currency && a.amount === b.amount
 }

@@ -1,5 +1,6 @@
 import { createRouter } from '@tanstack/react-router'
 import { routeTree } from './routeTree.gen'
+import { ErrorState, RoutePending } from '@/components/ui/ErrorState'
 
 /**
  * Serializador de search params con formato plano (URLSearchParams):
@@ -28,6 +29,21 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: 'intent',
     stringifySearch: flatStringifySearch,
+    // Defecto D19: toda ruta (presente o futura) tiene estado de carga y de
+    // error sin repetir el componente en cada archivo.
+    defaultPendingComponent: RoutePending,
+    defaultPendingMs: 150,
+    defaultPendingMinMs: 200,
+    defaultErrorComponent: ({ error, reset }) => (
+      <ErrorState
+        message={
+          error instanceof Error && error.message
+            ? error.message
+            : 'No hemos podido cargar esta página. Vuelva a intentarlo en un momento.'
+        }
+        onRetry={reset}
+      />
+    ),
   })
   return router
 }

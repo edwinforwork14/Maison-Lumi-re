@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { useStore } from '@/lib/store'
-import { formatPrice } from '@/lib/format'
-import { quoteCart, placeOrder } from '@/features/commerce.api'
-import type { CartTotals, ShippingMethodId } from '@/data/types'
+import { formatMoney } from '@/lib/money-format'
+import { isZero, type Money } from '@/domain/money'
+import { placeOrder } from '@/features/commerce.api'
+import { useCartQuote } from '@/features/cart/use-cart-quote'
+import type { ShippingMethodId } from '@/domain/pricing'
 
 export const Route = createFileRoute('/checkout')({
   head: () => ({ meta: [{ title: 'Checkout — Maison Lumière' }] }),
@@ -31,22 +32,22 @@ const initialForm: FormData = {
   country: 'España',
 }
 
-const shippingLabels: Record<ShippingMethodId, { name: string; description: string; price: number }> = {
-  standard: { name: 'Estándar', description: '3 – 5 días laborables', price: 12 },
-  express: { name: 'Express', description: '24 – 48 h', price: 24 },
-}
-
+/**
+ * Checkout. Todo importe visible procede de `quoteCart` — incluidos los precios
+ * y la gratuidad de cada método de envío, que ya no están duplicados en el
+ * cliente (defectos D5 y D37). La cantidad se contrasta con el stock real del
+ * SKU antes de permitir confirmar (defecto D18).
+ */
 function CheckoutPage() {
   const { cart, clearCart } = useStore()
   const [form, setForm] = useState<FormData>(initialForm)
   const [shipping, setShipping] = useState<ShippingMethodId>('standard')
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null)
-  const [placedTotal, setPlacedTotal] = useState(0)
+  const [placedTotal, setPlacedTotal] = useState<Money | null>(null)
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // Líneas desde el store local (persistencia v1) — el servidor re-cotiza.
   const lines = useMemo(
     () =>
       cart.map((i) => ({
@@ -57,15 +58,12 @@ function CheckoutPage() {
     [cart],
   )
 
-  // Fuente única de verdad: el servidor cotiza subtotal, envío y total (D5).
-  const { data: quote } = useQuery({
-    queryKey: ['cart-quote', lines, shipping],
-    queryFn: () => quoteCart({ data: { lines, shippingMethod: shipping } }),
-    enabled: lines.length > 0,
-  })
+  // Fuente única de verdad del dinero: el servidor cotiza subtotal, envío y total.
+  const { quote, isLoading } = useCartQuote(shipping)
 
-  const shippingCost = quote?.shipping ?? 0
-  const total = quote?.total ?? 0
+  // Líneas cuya cantidad pedida supera el stock real del SKU (D18).
+  const oversold = (quote?.lines ?? []).filter((l) => l.quantity > l.availableStock)
+  const blocked = oversold.length > 0
 
   // Idempotencia: una clave por intento de compra del contenido actual.
   const idempotencyKey = useMemo(
@@ -97,7 +95,7 @@ function CheckoutPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (lines.length === 0 || !validate() || submitting) return
+    if (lines.length === 0 || blocked || !validate() || submitting) return
 
     setSubmitting(true)
     setSubmitError('')
@@ -128,7 +126,7 @@ function CheckoutPage() {
   if (placedOrderNumber) {
     return (
       <div className="mx-auto max-w-2xl animate-fade-up px-4 py-24 text-center md:py-32">
-        <p className="mb-3 text-[11px] uppercase tracking-[0.3em] text-taupe">
+        <p className="mb-3 label-wide tracking-[0.3em] text-taupe">
           Pedido confirmado
         </p>
         <h1 className="mb-4 font-serif text-4xl font-light md:text-5xl">
@@ -142,22 +140,22 @@ function CheckoutPage() {
           Enviaremos la confirmación a {form.email}.
         </p>
         <div className="mx-auto mb-10 max-w-sm bg-sand p-8 text-left text-sm">
-          <p className="mb-4 text-[11px] uppercase tracking-[0.25em] text-taupe">
-            Resumen
-          </p>
+          <p className="mb-4 eyebrow">Resumen</p>
           <div className="flex justify-between py-1">
             <span>Total</span>
-            <span className="tabular-nums">{formatPrice(placedTotal)}</span>
+            <span className="tabular-nums">
+              {placedTotal ? formatMoney(placedTotal) : '—'}
+            </span>
           </div>
           <div className="flex justify-between py-1 text-taupe">
             <span>Envío</span>
-            <span>{shippingLabels[shipping].name}</span>
+            <span>
+              {quote?.shippingOptions.find((o) => o.id === shipping)?.label ??
+                shipping}
+            </span>
           </div>
         </div>
-        <Link
-          to="/shop"
-          className="border border-ink px-10 py-4 text-[11px] uppercase tracking-[0.25em] transition-colors hover:bg-ink hover:text-ivory"
-        >
+        <Link to="/shop" className="btn btn-outline px-10 py-4 label-wide">
           Continuar comprando
         </Link>
       </div>
@@ -174,10 +172,7 @@ function CheckoutPage() {
         <p className="mb-10 text-sm text-taupe">
           Añada piezas al carrito para finalizar la compra.
         </p>
-        <Link
-          to="/shop"
-          className="border border-ink px-8 py-3 text-[11px] uppercase tracking-[0.2em] transition-colors hover:bg-ink hover:text-ivory"
-        >
+        <Link to="/shop" className="btn btn-outline px-8 py-3 label">
           Descubrir la colección
         </Link>
       </div>
@@ -201,9 +196,7 @@ function CheckoutPage() {
         <div className="space-y-12">
           {/* Contacto */}
           <section>
-            <h2 className="mb-6 text-[11px] uppercase tracking-[0.25em] text-taupe">
-              1 — Información personal
-            </h2>
+            <h2 className="mb-6 eyebrow">1 — Información personal</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <input
@@ -244,9 +237,7 @@ function CheckoutPage() {
 
           {/* Dirección */}
           <section>
-            <h2 className="mb-6 text-[11px] uppercase tracking-[0.25em] text-taupe">
-              2 — Dirección de envío
-            </h2>
+            <h2 className="mb-6 eyebrow">2 — Dirección de envío</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <input
@@ -292,56 +283,54 @@ function CheckoutPage() {
             </div>
           </section>
 
-          {/* Envío */}
+          {/* Envío — métodos, precios y gratuidad vienen del servidor */}
           <section>
-            <h2 className="mb-6 text-[11px] uppercase tracking-[0.25em] text-taupe">
-              3 — Método de envío
-            </h2>
-            <div className="space-y-3">
-              {(Object.keys(shippingLabels) as ShippingMethodId[]).map((id) => {
-                const m = shippingLabels[id]
-                const free = (quote?.subtotal ?? 0) >= 500
-                return (
+            <h2 className="mb-6 eyebrow">3 — Método de envío</h2>
+            {isLoading || !quote ? (
+              <p className="text-sm text-taupe">Calculando opciones de envío…</p>
+            ) : (
+              <div className="space-y-3">
+                {quote.shippingOptions.map((option) => (
                   <label
-                    key={id}
+                    key={option.id}
                     className={`flex cursor-pointer items-center justify-between border px-5 py-4 transition-colors ${
-                      shipping === id ? 'border-ink' : 'border-linen hover:border-clay'
+                      shipping === option.id
+                        ? 'border-ink'
+                        : 'border-linen hover:border-clay'
                     }`}
                   >
                     <span className="flex items-center gap-4">
                       <input
                         type="radio"
                         name="shipping"
-                        checked={shipping === id}
-                        onChange={() => setShipping(id)}
+                        checked={shipping === option.id}
+                        onChange={() => setShipping(option.id)}
                         className="h-3.5 w-3.5 accent-[#1a1815]"
                       />
                       <span>
-                        <span className="block text-sm">{m.name}</span>
+                        <span className="block text-sm">{option.label}</span>
                         <span className="block text-xs text-taupe">
-                          {m.description}
+                          {option.description}
                         </span>
                       </span>
                     </span>
                     <span className="text-sm tabular-nums">
-                      {free ? 'Gratuito' : formatPrice(m.price)}
+                      {option.free ? 'Gratuito' : formatMoney(option.price)}
                     </span>
                   </label>
-                )
-              })}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
         </div>
 
         {/* Resumen — pintado desde la cotización del servidor */}
         <aside>
           <div className="bg-sand p-8 lg:sticky lg:top-32">
-            <h2 className="mb-6 text-[11px] uppercase tracking-[0.25em] text-taupe">
-              Su pedido
-            </h2>
+            <h2 className="mb-6 eyebrow">Su pedido</h2>
             <ul className="mb-6 space-y-4 border-b border-linen pb-6">
               {(quote?.lines ?? []).map((line) => (
-                <li key={line.sku} className="flex gap-4">
+                <li key={line.variantId} className="flex gap-4">
                   <img
                     src={line.image}
                     alt={line.name}
@@ -354,7 +343,7 @@ function CheckoutPage() {
                     </p>
                   </div>
                   <span className="text-sm tabular-nums">
-                    {formatPrice(line.lineTotal)}
+                    {formatMoney(line.lineTotal)}
                   </span>
                 </li>
               ))}
@@ -362,26 +351,42 @@ function CheckoutPage() {
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <dt>Subtotal</dt>
-                <dd className="tabular-nums">{formatPrice(quote?.subtotal ?? 0)}</dd>
+                <dd className="tabular-nums">
+                  {quote ? formatMoney(quote.subtotal) : '—'}
+                </dd>
               </div>
               <div className="flex justify-between">
                 <dt>Envío</dt>
                 <dd>
-                  {shippingCost === 0 ? 'Gratuito' : formatPrice(shippingCost)}
+                  {quote && isZero(quote.shipping)
+                    ? 'Gratuito'
+                    : quote
+                      ? formatMoney(quote.shipping)
+                      : '—'}
                 </dd>
               </div>
               <div className="flex justify-between border-t border-linen pt-3 text-base">
                 <dt className="uppercase tracking-[0.15em]">Total</dt>
-                <dd className="font-medium tabular-nums">{formatPrice(total)}</dd>
+                <dd className="font-medium tabular-nums">
+                  {quote ? formatMoney(quote.total) : '—'}
+                </dd>
               </div>
             </dl>
-            {submitError && (
-              <p className="mt-4 text-xs text-gold">{submitError}</p>
+            {blocked && (
+              <p className="mt-4 text-xs text-gold">
+                {oversold
+                  .map(
+                    (l) =>
+                      `Solo quedan ${l.availableStock} uds. de ${l.name} (${l.color})`,
+                  )
+                  .join(' · ')}
+              </p>
             )}
+            {submitError && <p className="mt-4 text-xs text-gold">{submitError}</p>}
             <button
               type="submit"
-              disabled={submitting || !quote}
-              className="mt-8 w-full bg-ink py-4 text-[11px] uppercase tracking-[0.25em] text-ivory transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:bg-clay"
+              disabled={submitting || !quote || blocked}
+              className="btn btn-solid btn-block label-wide mt-8 disabled:cursor-not-allowed disabled:bg-clay"
             >
               {submitting ? 'Procesando…' : 'Confirmar pedido'}
             </button>

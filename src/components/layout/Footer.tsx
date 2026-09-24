@@ -11,7 +11,7 @@ export function Footer() {
       {/* Newsletter */}
       <section className="mx-auto max-w-7xl px-4 py-16 md:px-8 md:py-20">
         <div className="mx-auto max-w-xl text-center">
-          <p className="mb-2 text-[11px] uppercase tracking-[0.3em] text-taupe">
+          <p className="mb-2 label-wide tracking-[0.3em] text-taupe">
             Newsletter
           </p>
           <h2 className="mb-4 font-serif text-3xl font-light">
@@ -43,7 +43,7 @@ export function Footer() {
               />
               <button
                 type="submit"
-                className="shrink-0 pl-4 text-[11px] uppercase tracking-[0.2em] transition-colors hover:text-taupe"
+                className="shrink-0 pl-4 label transition-colors hover:text-taupe"
               >
                 Suscribirse
               </button>
@@ -65,7 +65,7 @@ export function Footer() {
             </p>
           </div>
           <div>
-            <p className="mb-4 text-[11px] uppercase tracking-[0.25em] text-taupe">
+            <p className="mb-4 eyebrow">
               Tienda
             </p>
             <ul className="space-y-2.5 text-sm">
@@ -88,7 +88,7 @@ export function Footer() {
             </ul>
           </div>
           <div>
-            <p className="mb-4 text-[11px] uppercase tracking-[0.25em] text-taupe">
+            <p className="mb-4 eyebrow">
               Ayuda
             </p>
             <ul className="space-y-2.5 text-sm">
@@ -100,7 +100,7 @@ export function Footer() {
             </ul>
           </div>
           <div>
-            <p className="mb-4 text-[11px] uppercase tracking-[0.25em] text-taupe">
+            <p className="mb-4 eyebrow">
               Maison
             </p>
             <ul className="space-y-2.5 text-sm">
@@ -116,7 +116,7 @@ export function Footer() {
 
       {/* Base */}
       <div className="border-t border-linen">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-[11px] uppercase tracking-[0.2em] text-taupe md:flex-row md:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 label text-taupe md:flex-row md:px-8">
           <span>© 2026 Maison Lumière</span>
           <div className="flex gap-6">
             <span>Política de privacidad</span>

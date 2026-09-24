@@ -1,27 +1,32 @@
 /**
  * Semillas de catálogo para el servidor (plan.md §8.2: data → server/seed).
  *
- * Normalización aplicada (defectos D14/D15):
- * - cada color se convierte en una variante con SKU y stock propio;
- * - el stock del producto pasa a ser un agregado derivado;
- * - las categorías dejan de ser una union literal en los tipos.
+ * Normalización aplicada (defectos D14/D15/D21):
+ * - cada color se convierte en una variante con SKU, precio y stock propios;
+ * - el stock del producto pasa a ser un agregado derivado de sus variantes;
+ * - los precios viven en **céntimos** (`priceCents`), nunca en euros decimales.
  *
- * Mientras dura la migración strangler, las semillas extienden la forma
- * actual (ProductLike) para que la UI y los tests de caracterización sigan
- * funcionando sin cambios; en Fase 3 el modelo pasa a Product completo.
+ * Mientras dura la migración strangler, las semillas extienden la forma actual
+ * (ProductLike) para que la UI y los tests de caracterización sigan funcionando
+ * sin cambios; en Fase 3 el modelo pasa a Product completo.
  */
 
-import { queryProductsFrom, type CatalogFilters, type ProductLike } from '@/domain/catalog'
-import { categories } from '../../data/categories'
-import { collections } from '../../data/collections'
-import { products } from '../../data/products'
+import {
+  queryProductsFrom,
+  type CatalogFilters,
+  type ProductLike,
+} from '../../domain/catalog/query.ts'
+import { categories } from '../../data/categories.ts'
+import { collections } from '../../data/collections.ts'
+import { products } from '../../data/products.ts'
 
 export interface ProductVariantSeed {
   readonly id: string
   readonly sku: string
   readonly productId: string
   readonly color: string
-  readonly price: number
+  /** Precio de la variante en céntimos. */
+  readonly priceCents: number
   readonly stock: number
 }
 
@@ -30,7 +35,7 @@ export interface ProductSeed extends ProductLike {
   readonly slug: string
   readonly collection: string
   readonly images: string[]
-  readonly compareAtPrice?: number
+  readonly compareAtPriceCents?: number
   readonly variants: readonly ProductVariantSeed[]
   readonly stock: number
 }
@@ -49,7 +54,7 @@ function slugToken(color: string): string {
 function buildVariants(p: {
   id: string
   slug: string
-  price: number
+  priceCents: number
   colors: string[]
   stock: number
 }): ProductVariantSeed[] {
@@ -60,7 +65,7 @@ function buildVariants(p: {
     sku: `${p.slug.toUpperCase()}-${slugToken(color).toUpperCase()}`,
     productId: p.id,
     color,
-    price: p.price,
+    priceCents: p.priceCents,
     stock: i === 0 ? p.stock - base * (n - 1) : base,
   }))
 }
@@ -70,7 +75,7 @@ export const productSeeds: ProductSeed[] = products.map((p) => {
   return {
     ...p,
     variants,
-    stock: variants.reduce((sum, v) => sum + v.stock, 0),
+    stock: variants.reduce((total, v) => total + v.stock, 0),
   }
 })
 
@@ -97,6 +102,12 @@ export const catalogRepository = {
   findByIds(ids: string[]): ProductSeed[] {
     const set = new Set(ids)
     return productSeeds.filter((p) => set.has(p.id))
+  },
+
+  /** Variante concreta de un producto por color (clave del carrito). */
+  findVariant(productId: string, color: string): ProductVariantSeed | undefined {
+    const product = productSeeds.find((p) => p.id === productId)
+    return product?.variants.find((v) => v.color === color)
   },
 
   listCategories() {

@@ -25,6 +25,7 @@ import {
 } from '@/server/session/store'
 import { AppError } from '@/server/errors'
 import type { CatalogFilters, SortId } from '@/domain/catalog'
+import type { Money } from '@/domain/money'
 import type { Product } from '@/data/types'
 
 // ─── Esquemas de entrada (Zod en toda frontera) ─────────────────────────────
@@ -34,8 +35,9 @@ export const catalogFiltersSchema = z.object({
   collection: z.string().optional(),
   colors: z.array(z.string()).optional(),
   materials: z.array(z.string()).optional(),
-  priceMin: z.number().nonnegative().optional(),
-  priceMax: z.number().nonnegative().optional(),
+  /** Cotas de precio en céntimos (enteros): nunca euros decimales. */
+  priceMinCents: z.number().int().nonnegative().optional(),
+  priceMaxCents: z.number().int().nonnegative().optional(),
   sort: z
     .enum(['recommended', 'price-asc', 'price-desc', 'bestsellers', 'new'])
     .optional(),
@@ -136,7 +138,7 @@ export const quoteCart = createServerFn({ method: 'POST' })
 
 export const placeOrder = createServerFn({ method: 'POST' })
   .validator(placeOrderSchema)
-  .handler(async ({ data }): Promise<{ orderNumber: string; total: number }> => {
+  .handler(async ({ data }): Promise<{ orderNumber: string; total: Money }> => {
     const order = placeOrderService(data)
     return { orderNumber: order.number, total: order.totals.total }
   })
@@ -200,3 +202,10 @@ export async function requireUser(): Promise<SessionUser> {
 
 // re-export del tipo SortId para consumers de la API
 export type { SortId }
+
+/**
+ * DTOs del comercio para el cliente (solo tipos: se borran al compilar).
+ * El cliente nunca importa `@/server/**`: consume estos tipos a través de la
+ * superficie pública que es este archivo.
+ */
+export type { CartQuote, QuoteLine, ShippingOptionQuote } from '@/server/services/commerce'

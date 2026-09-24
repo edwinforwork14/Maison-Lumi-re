@@ -43,7 +43,7 @@ function Home() {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-ink/40 via-transparent to-transparent" />
         <div className="relative flex h-full flex-col items-start justify-end px-6 pb-20 md:px-16 md:pb-28">
-          <p className="mb-4 text-[11px] uppercase tracking-[0.35em] text-ivory/80">
+          <p className="mb-4 label-wide tracking-[0.35em] text-ivory/80">
             Colección Lumière · Otoño 2026
           </p>
           <h1 className="mb-8 max-w-xl font-serif text-4xl font-light leading-tight text-ivory md:text-6xl">
@@ -100,7 +100,7 @@ function Home() {
       <section className="bg-charcoal text-ivory">
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 md:grid-cols-2 md:px-8 md:py-28">
           <div>
-            <p className="mb-4 text-[11px] uppercase tracking-[0.3em] text-sand">
+            <p className="mb-4 label-wide tracking-[0.3em] text-sand">
               El atelier
             </p>
             <h2 className="mb-6 font-serif text-3xl font-light leading-snug md:text-5xl">

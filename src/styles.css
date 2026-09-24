@@ -37,7 +37,33 @@
 /* Variante de navegación: abre el panel por hover Y foco (corrige D1). */
 @custom-variant group-nav (&:is(:where(.group-nav):is(:hover, :focus-within) *));
 
-/* ─── Utilidades de marca (corrige D10: fin de las cadenas repetidas) ───── */
+/* ─── Utilidades de marca (corrige D10: fin de las cadenas repetidas) ─────
+   `label*` aportan tamaño, mayúsculas y tracking (sin color, para poder
+   combinarlas); `eyebrow` añade el color secundario de marca. */
+@utility label {
+  @apply text-[11px] uppercase tracking-[0.2em];
+}
+
+@utility label-wide {
+  @apply text-[11px] uppercase tracking-[0.25em];
+}
+
+@utility label-sm {
+  @apply text-xs uppercase tracking-[0.2em];
+}
+
+@utility label-sm-wide {
+  @apply text-xs uppercase tracking-[0.25em];
+}
+
+@utility label-xs {
+  @apply text-[10px] uppercase tracking-[0.2em];
+}
+
+@utility label-xs-wide {
+  @apply text-[10px] uppercase tracking-[0.25em];
+}
+
 @utility eyebrow {
   @apply text-[11px] uppercase tracking-[0.25em] text-taupe;
 }
@@ -48,6 +74,14 @@
 
 @utility btn-outline {
   @apply border border-ink text-ink hover:bg-ink hover:text-ivory;
+}
+
+@utility btn-solid {
+  @apply bg-ink py-4 text-center text-ivory transition-colors hover:bg-charcoal;
+}
+
+@utility btn-block {
+  @apply w-full py-4 text-center;
 }
 
 @utility field {

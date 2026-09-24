@@ -1,39 +1,64 @@
 /**
  * Servicios de cotización y pedidos (plan.md §4.5–§4.7).
  * El servidor es la única autoridad de precios, stock y totales (regla de
- * oro 2): el cliente pinta el resultado de quoteCart, nunca calcula.
+ * oro 2): el cliente pinta el resultado de `quoteCart`, nunca calcula.
+ *
+ * Todo importe es `Money` en céntimos (defectos D17/D21): aquí no existe
+ * ningún precio en euros decimales ni formateo de importes.
  */
 
-import { AppError } from '../errors'
-import { logger } from '../logger'
+import { AppError } from '../errors.ts'
+import { logger } from '../logger.ts'
 import {
   catalogRepository,
   type ProductSeed,
-} from '../seed/catalog'
-import { shippingCostFor, type ShippingMethodId } from '@/domain/pricing'
-import { shippingMethods } from '../../data/shipping'
-import { formatMajor } from '@/lib/money-format'
+  type ProductVariantSeed,
+} from '../seed/catalog.ts'
+import { add, money, multiply, sum, type Money } from '../../domain/money/money.ts'
+import {
+  amountToFreeShipping,
+  isFreeShipping,
+  shippingCostFor,
+  type ShippingMethodId,
+} from '../../domain/pricing/rules.ts'
+import { shippingMethods } from '../../data/shipping.ts'
 
-// ─── Cotización autoritativa del carrito (defecto D5) ────────────────────────
+/** Tope duro por línea: protección contra payloads absurdos. */
+const MAX_QUANTITY_PER_LINE = 99
+
+// ─── Cotización autoritativa del carrito (defectos D5 y D18) ─────────────────
 
 export interface QuoteLine {
   readonly productId: string
+  readonly variantId: string
+  readonly slug: string
   readonly sku: string
   readonly name: string
   readonly color: string
   readonly image: string
-  readonly unitPrice: number
+  readonly unitPrice: Money
   readonly quantity: number
-  readonly lineTotal: number
+  readonly lineTotal: Money
+  /** Unidades disponibles del SKU: es el tope real de cantidad (D18). */
+  readonly availableStock: number
   readonly availability: 'in_stock' | 'low' | 'out_of_stock'
+}
+
+export interface ShippingOptionQuote {
+  readonly id: ShippingMethodId
+  readonly label: string
+  readonly description: string
+  readonly price: Money
+  readonly free: boolean
 }
 
 export interface CartQuote {
   readonly lines: readonly QuoteLine[]
-  readonly subtotal: number
-  readonly shipping: number
-  readonly total: number
-  readonly freeShippingRemaining: number
+  readonly subtotal: Money
+  readonly shipping: Money
+  readonly total: Money
+  readonly freeShippingRemaining: Money
+  readonly shippingOptions: readonly ShippingOptionQuote[]
 }
 
 export interface QuoteInput {
@@ -41,8 +66,13 @@ export interface QuoteInput {
   readonly shippingMethod?: ShippingMethodId
 }
 
-function variantOf(product: ProductSeed, color: string) {
+function variantOf(product: ProductSeed, color: string): ProductVariantSeed | undefined {
   return product.variants.find((v) => v.color === color)
+}
+
+function availabilityOf(stock: number): QuoteLine['availability'] {
+  if (stock === 0) return 'out_of_stock'
+  return stock <= 3 ? 'low' : 'in_stock'
 }
 
 export function quoteCart(input: QuoteInput): CartQuote {
@@ -52,38 +82,49 @@ export function quoteCart(input: QuoteInput): CartQuote {
     if (!product) continue // producto retirado: la línea cae de la cotización
     const variant = variantOf(product, item.color)
     if (!variant) continue
-    const quantity = Math.max(0, Math.min(item.quantity, 99))
+    const quantity = Math.max(
+      0,
+      Math.min(Math.trunc(item.quantity), MAX_QUANTITY_PER_LINE),
+    )
+    const unitPrice = money(variant.priceCents)
     lines.push({
       productId: product.id,
+      variantId: variant.id,
+      slug: product.slug,
       sku: variant.sku,
       name: product.name,
       color: variant.color,
       image: product.images[0] ?? '',
-      unitPrice: variant.price,
+      unitPrice,
       quantity,
-      lineTotal: variant.price * quantity,
-      availability:
-        variant.stock === 0
-          ? 'out_of_stock'
-          : variant.stock <= 3
-            ? 'low'
-            : 'in_stock',
+      lineTotal: multiply(unitPrice, quantity),
+      availableStock: variant.stock,
+      availability: availabilityOf(variant.stock),
     })
   }
 
-  const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0)
-  const method =
-    input.shippingMethod ??
-    (shippingMethods.find((m) => m.id === 'standard')?.id as ShippingMethodId)
-  const shipping = shippingCostFor(shippingMethods, method, subtotal)
-  const freeShippingRemaining = Math.max(0, 500 - subtotal)
+  const subtotal = sum(lines.map((l) => l.lineTotal))
+
+  // El envío también sale del servidor: la UI no conoce precios ni umbrales.
+  const shippingOptions: ShippingOptionQuote[] = shippingMethods.map((m) => ({
+    id: m.id,
+    label: m.name,
+    description: m.description,
+    price: shippingCostFor(shippingMethods, m.id, subtotal),
+    free: isFreeShipping(subtotal),
+  }))
+
+  const method = input.shippingMethod ?? 'standard'
+  const shipping =
+    shippingOptions.find((o) => o.id === method)?.price ?? money(0, subtotal.currency)
 
   return {
     lines,
-    subtotal: formatMajor(subtotal) === '' ? subtotal : subtotal, // números, no strings: el formateo es asunto del cliente
+    subtotal,
     shipping,
-    total: subtotal + shipping,
-    freeShippingRemaining,
+    total: add(subtotal, shipping),
+    freeShippingRemaining: amountToFreeShipping(subtotal),
+    shippingOptions,
   }
 }
 
@@ -103,7 +144,11 @@ export interface ServerOrder {
   }
   readonly shippingMethod: ShippingMethodId
   readonly lines: readonly QuoteLine[]
-  readonly totals: { readonly subtotal: number; readonly shipping: number; readonly total: number }
+  readonly totals: {
+    readonly subtotal: Money
+    readonly shipping: Money
+    readonly total: Money
+  }
 }
 
 const ordersByNumber = new Map<string, ServerOrder>()
@@ -129,7 +174,7 @@ export function placeOrder(input: PlaceOrderInput): ServerOrder {
     throw new AppError('VALIDATION', 'El carrito está vacío')
   }
 
-  const soldOut = quote.lines.filter((l) => l.availability === 'out_of_stock')
+  const soldOut = quote.lines.filter((l) => l.availableStock === 0)
   if (soldOut.length > 0) {
     throw new AppError(
       'OUT_OF_STOCK',
@@ -137,13 +182,22 @@ export function placeOrder(input: PlaceOrderInput): ServerOrder {
     )
   }
 
+  // D18: la cantidad pedida nunca puede superar el stock real del SKU.
+  const oversold = quote.lines.filter((l) => l.quantity > l.availableStock)
+  if (oversold.length > 0) {
+    throw new AppError(
+      'OUT_OF_STOCK',
+      oversold
+        .map((l) => `Solo quedan ${l.availableStock} uds. de ${l.name} (${l.color})`)
+        .join(' · '),
+    )
+  }
+
   const order: ServerOrder = {
     number: generateOrderNumber(),
     createdAt: new Date().toISOString(),
     customer: input.customer,
-    shippingMethod:
-      input.shippingMethod ??
-      ('standard' as ShippingMethodId),
+    shippingMethod: input.shippingMethod ?? 'standard',
     lines: quote.lines,
     totals: {
       subtotal: quote.subtotal,
@@ -166,17 +220,17 @@ export function findOrderByNumber(number: string): ServerOrder | undefined {
 export function listOrdersByCustomer(email: string): Array<{
   number: string
   createdAt: string
-  total: number
+  total: Money
   itemsCount: number
 }> {
-  email = email.trim().toLowerCase()
+  const normalized = email.trim().toLowerCase()
   return [...ordersByNumber.values()]
-    .filter((o) => o.customer.email.toLowerCase() === email)
+    .filter((o) => o.customer.email.toLowerCase() === normalized)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((o) => ({
       number: o.number,
       createdAt: o.createdAt,
       total: o.totals.total,
-      itemsCount: o.lines.reduce((n, l) => n + l.quantity, 0),
+      itemsCount: o.lines.reduce((total, l) => total + l.quantity, 0),
     }))
 }

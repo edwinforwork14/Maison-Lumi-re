@@ -116,7 +116,7 @@ export function MegaMenu({ section }: { section: NavSection }) {
                 {section.highlight.title}
               </p>
               <p className="mb-6 text-sm text-taupe">{section.highlight.text}</p>
-              <span className="text-[11px] uppercase tracking-[0.2em] underline underline-offset-4">
+              <span className="label underline underline-offset-4">
                 {section.highlight.cta} →
               </span>
             </div>

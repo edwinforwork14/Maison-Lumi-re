@@ -2,25 +2,27 @@
  * Reglas puras de precios y envío (núcleo de dominio).
  *
  * Sin React, sin red, sin framework: solo reglas de negocio testeables.
- * Las cantidades son números "mayores" (euros) mientras el modelo de datos
- * no migre a Money en unidades menores (plan.md Fase 2). La firma ya es la
- * definitiva, de modo que migrar el formato no cambiará a los llamadores.
+ * TODO importe es `Money` (enteros en unidades menores, céntimos): el dominio
+ * no maneja ninguna cantidad monetaria en euros decimales (defectos D17/D21).
  */
+
+import { money, type Money } from '../money/money.ts'
+
+export type ShippingMethodId = 'standard' | 'express'
 
 export interface ShippingMethod {
   id: ShippingMethodId
   name: string
   description: string
-  price: number
+  /** Precio del método, en céntimos. */
+  price: Money
 }
 
-export type ShippingMethodId = 'standard' | 'express'
-
 /** Umbral de envío gratuito: regla de dominio, no un dato del catálogo. */
-export const FREE_SHIPPING_THRESHOLD = 500
+export const FREE_SHIPPING_THRESHOLD = money(50_000) // 500,00 €
 
-export function isFreeShipping(subtotal: number): boolean {
-  return subtotal >= FREE_SHIPPING_THRESHOLD
+export function isFreeShipping(subtotal: Money): boolean {
+  return subtotal.amount >= FREE_SHIPPING_THRESHOLD.amount
 }
 
 /**
@@ -30,13 +32,17 @@ export function isFreeShipping(subtotal: number): boolean {
 export function shippingCostFor(
   methods: readonly ShippingMethod[],
   methodId: ShippingMethodId,
-  subtotal: number,
-): number {
-  if (isFreeShipping(subtotal)) return 0
-  return methods.find((m) => m.id === methodId)?.price ?? 0
+  subtotal: Money,
+): Money {
+  if (isFreeShipping(subtotal)) return money(0, subtotal.currency)
+  const method = methods.find((m) => m.id === methodId)
+  return method ? method.price : money(0, subtotal.currency)
 }
 
-/** Importe que falta para alcanzar el envío gratuito (0 si ya se alcanzó). */
-export function amountToFreeShipping(subtotal: number): number {
-  return Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal)
+/** Importe que falta para alcanzar el envío gratuito (cero si ya se alcanzó). */
+export function amountToFreeShipping(subtotal: Money): Money {
+  return money(
+    Math.max(0, FREE_SHIPPING_THRESHOLD.amount - subtotal.amount),
+    subtotal.currency,
+  )
 }

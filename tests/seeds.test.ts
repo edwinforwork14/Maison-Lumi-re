@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { products } from '../src/data/products.ts'
+import { categories } from '../src/data/categories.ts'
+import { collections } from '../src/data/collections.ts'
 import {
   queryProductsFrom,
   type ProductLike,
@@ -34,12 +36,20 @@ describe('semillas: invariantes del catálogo real', () => {
     assert.equal(count('accessories'), 5)
   })
 
-  it('slugs únicos y precios/stock válidos', () => {
+  it('slugs únicos, precios en céntimos y stock válido', () => {
     assert.equal(new Set(products.map((p) => p.slug)).size, 28)
     for (const p of products) {
       const seed = p as unknown as { slug: string; stock: number; images: string[] }
       assert.ok(seed.slug, 'cada producto tiene slug')
-      assert.ok(p.price > 0, 'precio debe ser positivo')
+      // Defecto D21: los precios son enteros en céntimos, nunca euros decimales.
+      assert.ok(Number.isInteger(p.priceCents), `${seed.slug}: priceCents entero`)
+      assert.ok(p.priceCents > 0, 'precio debe ser positivo')
+      if (p.compareAtPriceCents !== undefined) {
+        assert.ok(
+          p.compareAtPriceCents >= p.priceCents,
+          `${seed.slug}: el precio tachado no puede ser menor que el actual`,
+        )
+      }
       assert.ok(seed.stock >= 0, 'stock no puede ser negativo')
       assert.ok(seed.images.length > 0, 'requiere imágenes')
     }
@@ -53,13 +63,45 @@ describe('semillas: invariantes del catálogo real', () => {
       ['escarpin-gala', 'siena-frame'],
     )
   })
+
+  // Defecto D15: los identificadores dejaron de ser un union literal, así que
+  // la integridad referencial se comprueba aquí en lugar de en el compilador.
+  it('cada producto apunta a una categoría y una colección existentes', () => {
+    const categoryIds = new Set(categories.map((c) => c.id))
+    const collectionIds = new Set(collections.map((c) => c.id))
+    for (const p of products) {
+      const seed = p as ProductSeed
+      assert.ok(
+        categoryIds.has(p.category),
+        `${seed.slug}: categoría desconocida "${p.category}"`,
+      )
+      assert.ok(
+        collectionIds.has(p.collection),
+        `${seed.slug}: colección desconocida "${p.collection}"`,
+      )
+    }
+  })
+
+  it('no hay categorías ni colecciones huérfanas', () => {
+    const usedCategories = new Set(products.map((p) => p.category))
+    const usedCollections = new Set(products.map((p) => p.collection))
+    for (const c of categories) assert.ok(usedCategories.has(c.id), `categoría sin uso: ${c.id}`)
+    for (const c of collections)
+      assert.ok(usedCollections.has(c.id), `colección sin uso: ${c.id}`)
+  })
 })
 
 describe('semillas: pipeline de consulta sobre el catálogo real', () => {
   it('price-asc deja el primer precio ≤ último', () => {
     const sorted = queryProductsFrom(source, { sort: 'price-asc' })
     assert.equal(sorted.length, 28)
-    assert.ok(sorted[0]!.price <= sorted[sorted.length - 1]!.price)
+    assert.ok(sorted[0]!.priceCents <= sorted[sorted.length - 1]!.priceCents)
+  })
+
+  it('las cotas de precio se comparan en céntimos', () => {
+    const under300 = queryProductsFrom(source, { priceMaxCents: 30_000 })
+    assert.ok(under300.length > 0)
+    assert.ok(under300.every((p) => p.priceCents <= 30_000))
   })
 
   it('la categoría eyewear filtra exactamente sus 10 monturas', () => {

@@ -14,7 +14,7 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-block px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${styles[kind]}`}
+      className={`inline-block px-3 py-1 label-xs ${styles[kind]}`}
     >
       {children}
     </span>

@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@/lib/store'
-import { formatPrice } from '@/lib/format'
+import { useCartQuote } from '@/features/cart/use-cart-quote'
+import { formatMoney } from '@/lib/money-format'
 import { QuantitySelector } from '@/components/ui/QuantitySelector'
 import { CartSummary } from '@/components/cart/CartSummary'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -10,36 +11,51 @@ export const Route = createFileRoute('/cart')({
   component: CartPage,
 })
 
+/**
+ * Página de carrito. Sólo pinta la cotización del servidor: precios, envío,
+ * disponibilidad y total vienen de `quoteCart` (defecto D5). La cantidad se
+ * limita al stock real del SKU (defecto D18).
+ */
 function CartPage() {
-  const { cartTotals, updateQuantity, removeFromCart } = useStore()
+  const { cartCount, updateQuantity, removeFromCart } = useStore()
+  const { quote, isLoading, isError, refetch } = useCartQuote()
 
   return (
     <div className="mx-auto max-w-7xl animate-fade-in px-4 py-14 md:px-8 md:py-20">
       <h1 className="mb-10 font-serif text-4xl font-light">Carrito</h1>
 
-      {cartTotals.lines.length === 0 ? (
+      {cartCount === 0 ? (
         <EmptyState
           title="Su carrito está vacío"
           message="Aún no ha añadido ninguna pieza. Descubra la nueva temporada."
           action={{ label: 'Descubrir la colección', linkProps: { to: '/shop' } }}
         />
+      ) : isLoading ? (
+        <div aria-busy="true" className="space-y-6">
+          <p className="eyebrow">Calculando su pedido…</p>
+          <div className="skeleton h-40 w-full" />
+          <div className="skeleton h-40 w-full" />
+        </div>
+      ) : isError || !quote ? (
+        <EmptyState
+          title="No se pudo calcular su pedido"
+          message="Ha ocurrido un problema al consultar precios y disponibilidad. Vuelva a intentarlo."
+          action={{ label: 'Reintentar', onClick: refetch }}
+        />
       ) : (
         <div className="grid gap-12 lg:grid-cols-[1fr_360px]">
           <div>
             <ul className="divide-y divide-linen border-y border-linen">
-              {cartTotals.lines.map((line) => (
-                <li
-                  key={`${line.product.id}-${line.color}`}
-                  className="flex gap-6 py-8"
-                >
+              {quote.lines.map((line) => (
+                <li key={line.variantId} className="flex gap-6 py-8">
                   <Link
                     to="/products/$slug"
-                    params={{ slug: line.product.slug }}
+                    params={{ slug: line.slug }}
                     className="shrink-0"
                   >
                     <img
-                      src={line.product.images[0]}
-                      alt={line.product.name}
+                      src={line.image}
+                      alt={line.name}
                       className="h-40 w-30 object-cover"
                     />
                   </Link>
@@ -48,32 +64,32 @@ function CartPage() {
                       <div>
                         <Link
                           to="/products/$slug"
-                          params={{ slug: line.product.slug }}
+                          params={{ slug: line.slug }}
                           className="text-sm hover:text-taupe"
                         >
-                          {line.product.name}
+                          {line.name}
                         </Link>
-                        <p className="mt-1 text-xs text-taupe">
-                          Color: {line.color}
-                        </p>
+                        <p className="mt-1 text-xs text-taupe">Color: {line.color}</p>
+                        {line.availability === 'low' ? (
+                          <p className="mt-1 text-xs text-clay">
+                            Últimas {line.availableStock} unidades
+                          </p>
+                        ) : null}
                       </div>
                       <span className="text-sm tabular-nums">
-                        {formatPrice(line.lineTotal)}
+                        {formatMoney(line.lineTotal)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <QuantitySelector
                         value={line.quantity}
-                        onChange={(q) =>
-                          updateQuantity(line.product.id, line.color, q)
-                        }
+                        max={line.availableStock}
+                        onChange={(q) => updateQuantity(line.productId, line.color, q)}
                       />
                       <button
                         type="button"
-                        onClick={() =>
-                          removeFromCart(line.product.id, line.color)
-                        }
-                        className="text-[11px] uppercase tracking-[0.2em] text-taupe underline-offset-4 hover:text-ink hover:underline"
+                        onClick={() => removeFromCart(line.productId, line.color)}
+                        className="label text-taupe underline-offset-4 hover:text-ink hover:underline"
                       >
                         Eliminar
                       </button>
@@ -84,7 +100,7 @@ function CartPage() {
             </ul>
             <Link
               to="/shop"
-              className="mt-8 inline-block text-[11px] uppercase tracking-[0.2em] underline-offset-4 hover:underline"
+              className="mt-8 inline-block label underline-offset-4 hover:underline"
             >
               ← Continuar comprando
             </Link>
@@ -92,12 +108,9 @@ function CartPage() {
 
           <aside>
             <CartSummary
-              totals={cartTotals}
+              totals={quote}
               cta={
-                <Link
-                  to="/checkout"
-                  className="block bg-ink py-4 text-center text-[11px] uppercase tracking-[0.25em] text-ivory transition-colors hover:bg-charcoal"
-                >
+                <Link to="/checkout" className="btn btn-solid btn-block label">
                   Finalizar compra
                 </Link>
               }
