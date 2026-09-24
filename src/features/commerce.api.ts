@@ -7,6 +7,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start'
+import { getCookie, getRequest, setCookie } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { catalogRepository } from '@/server/seed/catalog'
 import {
@@ -217,7 +218,8 @@ export const placeOrder = createServerFn({ method: 'POST' })
  * servidor, así que no hay nada que manipular desde el navegador.
  */
 export const listMyOrders = createServerFn({ method: 'GET' }).handler(async () => {
-  const user = requireSessionUser()
+  const user = await currentStorefrontUser()
+  if (!user) throw new AppError('UNAUTHENTICATED', 'Sesión requerida')
   if (isPostgresDataSource()) {
     const { listStorefrontOrders } = await import('@/server/services/storefront-orders')
     return listStorefrontOrders(user.email)
@@ -237,7 +239,7 @@ export const listMyOrders = createServerFn({ method: 'GET' }).handler(async () =
 export const getOrder = createServerFn({ method: 'GET' })
   .validator(z.object({ orderNumber: z.string().min(8).max(40) }))
   .handler(async ({ data }): Promise<ServerOrder | null> => {
-    const user = getSessionUser()
+    const user = await currentStorefrontUser()
     if (!user) throw new AppError('UNAUTHENTICATED', 'Sesión requerida')
 
     if (isPostgresDataSource()) {
@@ -257,17 +259,85 @@ export const getOrder = createServerFn({ method: 'GET' })
     return order
   })
 
-// ─── Sesión (defecto D6: la autoridad es el servidor) ────────────────────────
+// ─── Sesión (defecto D6/D40: la autoridad es el servidor) ────────────────────
+
+/** Cookie de la tienda (separada de la del panel). */
+const STOREFRONT_COOKIE = 'ml.session'
+const STOREFRONT_TTL_SECONDS = 60 * 60 * 24 * 7
+
+function storefrontIp(): string | null {
+  try {
+    const headers = getRequest().headers
+    const forwarded = headers.get('x-forwarded-for')
+    if (forwarded) return forwarded.split(',')[0]!.trim()
+    return headers.get('x-real-ip') ?? null
+  } catch {
+    return null
+  }
+}
+
+async function issueStorefrontSession(userId: string): Promise<void> {
+  const { createPostgresSessionsRepository, resolveSessionSecret } = await import(
+    '@/server/db/repositories/sessions.postgres'
+  )
+  const sessions = createPostgresSessionsRepository(undefined, resolveSessionSecret())
+  const issued = await sessions.issue({
+    userId,
+    kind: 'storefront',
+    ip: storefrontIp(),
+  })
+  setCookie(STOREFRONT_COOKIE, issued.cookieValue, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: STOREFRONT_TTL_SECONDS,
+  })
+}
+
+/**
+ * Usuario de la sesión actual, resuelto en el servidor.
+ *
+ * Con PostgreSQL la identidad vive en `users` + `customers` y la sesión en la
+ * tabla `sessions` (cookie firmada); sin base se mantiene el almacén en memoria
+ * como respaldo para entornos sin base de datos.
+ */
+async function currentStorefrontUser(): Promise<SessionUser | null> {
+  if (!isPostgresDataSource()) return getSessionUser()
+
+  const { createPostgresSessionsRepository, resolveSessionSecret } = await import(
+    '@/server/db/repositories/sessions.postgres'
+  )
+  const sessions = createPostgresSessionsRepository(undefined, resolveSessionSecret())
+  const session = await sessions.resolve(getCookie(STOREFRONT_COOKIE))
+  if (!session || session.kind !== 'storefront') return null
+
+  const { createPostgresStorefrontAuth } = await import('@/server/services/storefront-auth')
+  const account = await createPostgresStorefrontAuth().currentUser(session.userId)
+  if (!account) return null
+  return { firstName: account.firstName, lastName: account.lastName, email: account.email }
+}
+
 
 export const getSession = createServerFn({ method: 'GET' }).handler(
   async (): Promise<{ user: SessionUser | null }> => {
-    return { user: getSessionUser() }
+    return { user: await currentStorefrontUser() }
   },
 )
 
 export const loginFn = createServerFn({ method: 'POST' })
   .validator(credentialsSchema)
   .handler(async ({ data }): Promise<SessionUser> => {
+    if (isPostgresDataSource()) {
+      const { createPostgresStorefrontAuth } = await import('@/server/services/storefront-auth')
+      const account = await createPostgresStorefrontAuth().login({
+        email: data.email,
+        password: data.password,
+        context: { ip: storefrontIp() },
+      })
+      await issueStorefrontSession(account.id)
+      return { firstName: account.firstName, lastName: account.lastName, email: account.email }
+    }
     const user = loginService(data.email, data.password)
     createSessionCookie(user)
     return user
@@ -276,6 +346,17 @@ export const loginFn = createServerFn({ method: 'POST' })
 export const registerFn = createServerFn({ method: 'POST' })
   .validator(registerSchema)
   .handler(async ({ data }): Promise<SessionUser> => {
+    if (isPostgresDataSource()) {
+      const { createPostgresStorefrontAuth } = await import('@/server/services/storefront-auth')
+      const account = await createPostgresStorefrontAuth().register({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        password: data.password,
+      })
+      await issueStorefrontSession(account.id)
+      return { firstName: account.firstName, lastName: account.lastName, email: account.email }
+    }
     const user = registerService({
       firstName: data.firstName,
       lastName: data.lastName,
@@ -287,6 +368,14 @@ export const registerFn = createServerFn({ method: 'POST' })
   })
 
 export const logoutFn = createServerFn({ method: 'POST' }).handler(async () => {
+  if (isPostgresDataSource()) {
+    const { createPostgresSessionsRepository, resolveSessionSecret } = await import(
+      '@/server/db/repositories/sessions.postgres'
+    )
+    const sessions = createPostgresSessionsRepository(undefined, resolveSessionSecret())
+    await sessions.revoke(getCookie(STOREFRONT_COOKIE))
+    setCookie(STOREFRONT_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 })
+  }
   destroySession()
   return { ok: true }
 })

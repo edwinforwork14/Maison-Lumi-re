@@ -16,6 +16,7 @@ import { seedCatalog, type SeedOptions, type SeedSummary } from './catalog.ts'
 import { seedRbac } from './rbac.ts'
 import { seedProductMedia } from './media.ts'
 import { seedProductAttributes } from './attributes.ts'
+import { seedDevCustomer } from './customers.ts'
 
 export {
   DEV_ADMIN_EMAIL,
@@ -36,6 +37,7 @@ export async function seedDatabase(
 ): Promise<SeedSummary> {
   const summary = await seedCatalog(db, options)
   // Los atributos y las imágenes van después del catálogo: necesitan sus filas.
+  await seedDevCustomer(db)
   await seedProductAttributes(db)
   await seedProductMedia(db)
   // El catálogo de permisos y los cinco roles del Plan 02: sin esto el panel
