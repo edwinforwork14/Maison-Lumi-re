@@ -99,14 +99,34 @@ export async function listAdminOrders(
       totalCents: orders.totalCents,
       placedAt: orders.placedAt,
       createdAt: orders.createdAt,
-      itemCount: sql<number>`(select coalesce(sum(oi.quantity), 0)::int from order_items oi where oi.order_id = ${orders.id})`,
     })
     .from(orders)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(orders.createdAt), asc(orders.id))
     .limit(limit + 1)
 
-  return paginate(rows, limit, (row) => row.createdAt.toISOString(), (row) => row.id)
+  // Igual que en la tienda: los artículos se cuentan aparte (la subconsulta
+  // correlacionada devolvía 0 y el panel mostraba pedidos «vacíos»).
+  const ids = rows.map((row) => row.id)
+  const counts =
+    ids.length === 0
+      ? []
+      : await db
+          .select({
+            orderId: orderItems.orderId,
+            units: sql<number>`coalesce(sum(${orderItems.quantity}), 0)::int`,
+          })
+          .from(orderItems)
+          .where(inArray(orderItems.orderId, ids))
+          .groupBy(orderItems.orderId)
+  const unitsByOrder = new Map(counts.map((row) => [row.orderId, Number(row.units)]))
+
+  return paginate(
+    rows.map((row) => ({ ...row, itemCount: unitsByOrder.get(row.id) ?? 0 })),
+    limit,
+    (row) => row.createdAt.toISOString(),
+    (row) => row.id,
+  )
 }
 
 export interface AdminOrderDetail {

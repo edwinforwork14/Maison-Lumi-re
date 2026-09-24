@@ -15,6 +15,13 @@
       "when": 1790286812605,
       "tag": "0001_cute_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790288202258,
+      "tag": "0002_opposite_vin_gonzales",
+      "breakpoints": true
     }
   ]
 }

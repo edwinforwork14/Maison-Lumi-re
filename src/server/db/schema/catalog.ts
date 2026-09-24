@@ -111,6 +111,12 @@ export const products = pgTable(
     }),
     status: text('status').notNull().default('draft'),
     featured: boolean('featured').notNull().default(false),
+    /**
+     * Materiales del producto (Acetato, Cuero, Seda…). Es un `text[]` porque la
+     * tienda filtra por material y el número de valores es pequeño y cerrado;
+     * una tabla de atributos sería la evolución natural si crecen.
+     */
+    materials: text('materials').array().notNull().default(sql`'{}'::text[]`),
     publishedAt: timestamp('published_at', { withTimezone: true }),
     seoTitle: text('seo_title'),
     seoDescription: text('seo_description'),

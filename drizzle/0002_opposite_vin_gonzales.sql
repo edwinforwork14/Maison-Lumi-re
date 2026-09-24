@@ -1,0 +1,1 @@
+ALTER TABLE "products" ADD COLUMN "materials" text[] DEFAULT '{}'::text[] NOT NULL;

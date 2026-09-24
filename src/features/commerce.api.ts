@@ -25,6 +25,7 @@ import {
   type SessionUser,
 } from '@/server/session/store'
 import { AppError } from '@/server/errors'
+import { isPostgresDataSource } from '@/server/runtime/env'
 import type { CatalogFilters, SortId } from '@/domain/catalog'
 import type { Money } from '@/domain/money'
 import type { Product } from '@/data/types'
@@ -87,53 +88,95 @@ const registerSchema = credentialsSchema.extend({
 
 // Durante la migración strangler la API pública sigue hablando el tipo Product
 // de data/types (la UI lo consume); en Fase 3 se sustituye por el modelo nuevo.
+/**
+ * Fuente del catálogo según el entorno: PostgreSQL si está configurada, y el
+ * adaptador en memoria como respaldo (desarrollo sin base, tests de UI).
+ * Los dos devuelven la misma forma, así que las plantillas no cambian.
+ */
+async function catalogSource() {
+  if (isPostgresDataSource()) {
+    const { createPostgresCatalogRepository } = await import(
+      '@/server/db/repositories/catalog.postgres'
+    )
+    return createPostgresCatalogRepository()
+  }
+  return null
+}
+
 export const listProducts = createServerFn({ method: 'GET' })
   .validator(catalogFiltersSchema.optional())
   .handler(async ({ data }): Promise<Product[]> => {
-    return catalogRepository.search((data ?? {}) as CatalogFilters) as Product[]
+    const filters = (data ?? {}) as CatalogFilters
+    const source = await catalogSource()
+    if (source) return (await source.search(filters)) as unknown as Product[]
+    return catalogRepository.search(filters) as Product[]
   })
 
 export const getProductBySlug = createServerFn({ method: 'GET' })
   .validator(z.object({ slug: z.string().min(1) }))
   .handler(async ({ data }) => {
+    const source = await catalogSource()
+    if (source) return (await source.findBySlug(data.slug)) ?? null
     return catalogRepository.findBySlug(data.slug) ?? null
   })
 
-export const listCategories = createServerFn({ method: 'GET' }).handler(
-  async () => catalogRepository.listCategories(),
-)
+export const listCategories = createServerFn({ method: 'GET' }).handler(async () => {
+  const source = await catalogSource()
+  if (source) return source.listCategories()
+  return catalogRepository.listCategories()
+})
 
-export const listCollections = createServerFn({ method: 'GET' }).handler(
-  async () => catalogRepository.listCollections(),
-)
+export const listCollections = createServerFn({ method: 'GET' }).handler(async () => {
+  const source = await catalogSource()
+  if (source) return source.listCollections()
+  return catalogRepository.listCollections()
+})
 
-export const listFacets = createServerFn({ method: 'GET' }).handler(async () => ({
-  colors: catalogRepository.listColors(),
-  materials: catalogRepository.listMaterials(),
-}))
+export const listFacets = createServerFn({ method: 'GET' }).handler(async () => {
+  const source = await catalogSource()
+  if (source) {
+    return { colors: await source.listColors(), materials: await source.listMaterials() }
+  }
+  return {
+    colors: catalogRepository.listColors(),
+    materials: catalogRepository.listMaterials(),
+  }
+})
 
 export const listProductsByIds = createServerFn({ method: 'GET' })
   .validator(z.object({ ids: z.array(z.string()).max(100) }))
   .handler(async ({ data }): Promise<Product[]> => {
+    const source = await catalogSource()
+    if (source) return (await source.findByIds(data.ids)) as unknown as Product[]
     return catalogRepository.findByIds(data.ids) as Product[]
   })
 
 export const listRelatedProducts = createServerFn({ method: 'GET' })
-  .validator(z.object({ slug: z.string().min(1), limit: z.number().int().min(1).max(8).optional() }))
+  .validator(
+    z.object({ slug: z.string().min(1), limit: z.number().int().min(1).max(8).optional() }),
+  )
   .handler(async ({ data }): Promise<Product[]> => {
-    const product = catalogRepository.findBySlug(data.slug)
+    const source = await catalogSource()
+    const product = source
+      ? await source.findBySlug(data.slug)
+      : catalogRepository.findBySlug(data.slug)
     if (!product) return []
-    const related = catalogRepository
-      .search({ category: product.category })
-      .filter((p) => (p as { id?: string }).id !== product.id)
-    return related.slice(0, data.limit ?? 4) as Product[]
+    const related = source
+      ? await source.search({ category: product.category })
+      : catalogRepository.search({ category: product.category })
+    return related
+      .filter((candidate) => (candidate as { id?: string }).id !== product.id)
+      .slice(0, data.limit ?? 4) as unknown as Product[]
   })
-
 // ─── Carrito y pedidos ───────────────────────────────────────────────────────
 
 export const quoteCart = createServerFn({ method: 'POST' })
   .validator(quoteInputSchema)
   .handler(async ({ data }): Promise<CartQuote> => {
+    if (isPostgresDataSource()) {
+      const { quoteCartFromDb } = await import('@/server/services/storefront-orders')
+      return quoteCartFromDb(data)
+    }
     return quoteCartService(data)
   })
 
@@ -143,9 +186,25 @@ export const placeOrder = createServerFn({ method: 'POST' })
     // Si hay sesión, el pedido se registra a nombre de esa cuenta: el email del
     // formulario no puede suplantar a otro cliente.
     const sessionUser = getSessionUser()
+    const customer = { ...data.customer, email: sessionUser?.email ?? data.customer.email }
+
+    if (isPostgresDataSource()) {
+      // Camino real: transacción con reserva de stock y compromiso del pago
+      // simulado. Es lo que hace que una venta descuente existencias (D25).
+      const { placeStorefrontOrder } = await import('@/server/services/storefront-orders')
+      const placed = await placeStorefrontOrder({
+        email: customer.email,
+        lines: data.lines,
+        shippingMethod: data.shippingMethod,
+        customer,
+        idempotencyKey: data.idempotencyKey,
+      })
+      return { orderNumber: placed.orderNumber, total: placed.total }
+    }
+
     const order = placeOrderService({
       ...data,
-      customer: { ...data.customer, email: sessionUser?.email ?? data.customer.email },
+      customer,
     })
     return { orderNumber: order.number, total: order.totals.total }
   })
@@ -159,6 +218,10 @@ export const placeOrder = createServerFn({ method: 'POST' })
  */
 export const listMyOrders = createServerFn({ method: 'GET' }).handler(async () => {
   const user = requireSessionUser()
+  if (isPostgresDataSource()) {
+    const { listStorefrontOrders } = await import('@/server/services/storefront-orders')
+    return listStorefrontOrders(user.email)
+  }
   const { listOrdersByCustomer } = await import('@/server/services/commerce')
   return listOrdersByCustomer(user.email)
 })
@@ -174,13 +237,21 @@ export const listMyOrders = createServerFn({ method: 'GET' }).handler(async () =
 export const getOrder = createServerFn({ method: 'GET' })
   .validator(z.object({ orderNumber: z.string().min(8).max(40) }))
   .handler(async ({ data }): Promise<ServerOrder | null> => {
-    const { findOrderByNumber } = await import('@/server/services/commerce')
-    const order = findOrderByNumber(data.orderNumber)
-    if (!order) return null
+    const user = getSessionUser()
+    if (!user) throw new AppError('UNAUTHENTICATED', 'Sesión requerida')
 
-    const { ownsOrder } = await import('@/server/services/commerce')
-    if (!ownsOrder(order, getSessionUser()?.email)) {
-      // NOT_FOUND y no FORBIDDEN: no se confirma siquiera que el pedido exista.
+    if (isPostgresDataSource()) {
+      // La propiedad se comprueba en la propia consulta: si el email no
+      // coincide no hay fila, así que no se distingue «no existe» de «no es tuyo».
+      const { findStorefrontOrderForOwner } = await import('@/server/services/storefront-orders')
+      const order = await findStorefrontOrderForOwner(data.orderNumber, user.email)
+      if (!order) throw new AppError('NOT_FOUND', 'Pedido no encontrado')
+      return order as unknown as ServerOrder
+    }
+
+    const { findOrderByNumber, ownsOrder } = await import('@/server/services/commerce')
+    const order = findOrderByNumber(data.orderNumber)
+    if (!order || !ownsOrder(order, user.email)) {
       throw new AppError('NOT_FOUND', 'Pedido no encontrado')
     }
     return order

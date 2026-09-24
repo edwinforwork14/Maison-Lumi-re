@@ -14,6 +14,8 @@ import { pathToFileURL } from 'node:url'
 import { closeDb, createDbClient, requireDatabaseUrl, type Database } from '../client.ts'
 import { seedCatalog, type SeedOptions, type SeedSummary } from './catalog.ts'
 import { seedRbac } from './rbac.ts'
+import { seedProductMedia } from './media.ts'
+import { seedProductAttributes } from './attributes.ts'
 
 export {
   DEV_ADMIN_EMAIL,
@@ -33,6 +35,9 @@ export async function seedDatabase(
   options: SeedOptions = {},
 ): Promise<SeedSummary> {
   const summary = await seedCatalog(db, options)
+  // Los atributos y las imágenes van después del catálogo: necesitan sus filas.
+  await seedProductAttributes(db)
+  await seedProductMedia(db)
   // El catálogo de permisos y los cinco roles del Plan 02: sin esto el panel
   // daría FORBIDDEN incluso al super administrador.
   await seedRbac(db)

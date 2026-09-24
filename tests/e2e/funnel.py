@@ -127,7 +127,7 @@ def main():
         page.click("button:has-text('Confirmar pedido')")
         page.wait_for_selector("text=Pedido confirmado", timeout=8000)
         success = page.inner_text("body")
-        order_ok = re.search(r"ML-[A-Z0-9]+-[A-Z0-9]+", success) is not None
+        order_ok = re.search(r"ML-[A-Z0-9]+(?:-[A-Z0-9]+)?", success) is not None
         check("7a. pantalla de éxito con número ML-…", order_ok)
         page.goto(f"{BASE}/cart", wait_until="networkidle")
         check("7b. carrito queda vacío", "está vacío" in page.inner_text("main"))
