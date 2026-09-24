@@ -1,5 +1,18 @@
 import { Link } from '@tanstack/react-router'
-import { categories, collections } from '@/data'
+/**
+ * Datos de navegación mínimos que el layout inyecta. Antes este componente
+ * importaba los mocks de `@/data`, lo que metía el catálogo entero en el bundle
+ * del navegador (defecto D34); ahora los recibe ya resueltos por el servidor.
+ */
+export interface NavCategory {
+  id: string
+  name: string
+  editorial: string
+}
+export interface NavCollection {
+  id: string
+  name: string
+}
 
 export interface NavSection {
   label: string
@@ -11,7 +24,11 @@ export interface NavSection {
   highlight?: { title: string; text: string; to: string; cta: string }
 }
 
-export const navSections: NavSection[] = [
+export function buildNavSections(
+  categories: readonly NavCategory[],
+  collections: readonly NavCollection[],
+): NavSection[] {
+  return [
   {
     label: 'Novedades',
     to: '/shop',
@@ -76,7 +93,8 @@ export const navSections: NavSection[] = [
       cta: 'Ver colección',
     },
   })),
-]
+  ]
+}
 
 /**
  * Panel del mega menú (plan.md D1): visible por hover y por foco gracias a

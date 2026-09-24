@@ -1,12 +1,24 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@/lib/store'
-import { navSections, MegaMenu, type NavSection } from './MegaMenu'
+import {
+  buildNavSections,
+  MegaMenu,
+  type NavCategory,
+  type NavCollection,
+  type NavSection,
+} from './MegaMenu'
 import { MobileMenu } from './MobileMenu'
 import { SearchOverlay } from './SearchOverlay'
 
-export function Header() {
+export interface HeaderProps {
+  readonly categories: readonly NavCategory[]
+  readonly collections: readonly NavCollection[]
+}
+
+export function Header({ categories, collections }: HeaderProps) {
   const { cartCount, setCartOpen } = useStore()
+  const navSections = buildNavSections(categories, collections)
   const [openNav, setOpenNav] = useState<NavSection | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -119,7 +131,12 @@ export function Header() {
         {openNav && <MegaMenu section={openNav} />}
       </header>
 
-      <MobileMenu open={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <MobileMenu
+          open={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          categories={categories}
+          collections={collections}
+        />
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   )

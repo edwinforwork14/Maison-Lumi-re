@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
-import { categories, collections } from '@/data'
+import type { NavCategory, NavCollection } from './MegaMenu'
 
 interface MobileMenuProps {
   open: boolean
@@ -11,7 +11,20 @@ interface MobileMenuProps {
  * Menú móvil accesible (plan.md D9): role="dialog", aria-modal, foco
  * atrapado, cierre con Escape y bloqueo de scroll mientras está abierto.
  */
-export function MobileMenu({ open, onClose }: MobileMenuProps) {
+/**
+ * Menú móvil. Las categorías y colecciones llegan por props desde el layout:
+ * este componente ya no importa los mocks de `@/data` (defecto D34), que
+ * metían el catálogo entero en el bundle del navegador.
+ */
+export function MobileMenu({
+  open,
+  onClose,
+  categories,
+  collections,
+}: MobileMenuProps & {
+  readonly categories: readonly NavCategory[]
+  readonly collections: readonly NavCollection[]
+}) {
   const panelRef = useRef<HTMLElement | null>(null)
   const triggerRef = useRef<Element | null>(null)
 

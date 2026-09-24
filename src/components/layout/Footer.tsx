@@ -1,8 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { categories } from '@/data'
+import type { NavCategory } from './MegaMenu'
 
-export function Footer() {
+export function Footer({ categories }: { readonly categories: readonly NavCategory[] }) {
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
 

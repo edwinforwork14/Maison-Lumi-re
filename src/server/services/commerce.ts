@@ -234,3 +234,19 @@ export function listOrdersByCustomer(email: string): Array<{
       itemsCount: o.lines.reduce((total, l) => total + l.quantity, 0),
     }))
 }
+
+/**
+ * ¿Este pedido pertenece a esta identidad? (defecto D32)
+ *
+ * Función pura a propósito: es la regla que decide si se puede leer un pedido,
+ * así que se prueba sin servidor ni base de datos. La comparación es sobre
+ * email normalizado porque es el identificador que llevan los pedidos de la
+ * tienda (los de administración van por `orders.user_id`).
+ */
+export function ownsOrder(
+  order: { readonly customer: { readonly email: string } },
+  userEmail: string | null | undefined,
+): boolean {
+  if (!userEmail) return false
+  return order.customer.email.trim().toLowerCase() === userEmail.trim().toLowerCase()
+}

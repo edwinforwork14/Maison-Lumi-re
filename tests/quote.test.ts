@@ -6,6 +6,7 @@ import {
   listOrdersByCustomer,
 } from '../src/server/services/commerce.ts'
 import { catalogRepository } from '../src/server/seed/catalog.ts'
+import { ownsOrder } from '../src/server/services/commerce.ts'
 
 /**
  * Cotización y pedidos en el servidor (defectos D5, D17, D18, D21).
@@ -175,5 +176,21 @@ describe('placeOrder: stock, totales e idempotencia (D18/D27)', () => {
       idempotencyKey: key,
     })
     assert.equal(first.number, second.number)
+  })
+})
+
+describe('pedidos: la propiedad decide quién puede leer (defecto D32)', () => {
+  const order = { customer: { email: 'Ana.Garcia@example.com' } }
+
+  it('el dueño reconoce su pedido sin importar mayúsculas ni espacios', () => {
+    assert.equal(ownsOrder(order, 'ana.garcia@example.com'), true)
+    assert.equal(ownsOrder(order, '  ANA.GARCIA@EXAMPLE.COM  '), true)
+  })
+
+  it('otro usuario no puede leerlo, y sin sesión tampoco', () => {
+    assert.equal(ownsOrder(order, 'otro@example.com'), false)
+    assert.equal(ownsOrder(order, null), false)
+    assert.equal(ownsOrder(order, undefined), false)
+    assert.equal(ownsOrder(order, ''), false)
   })
 })

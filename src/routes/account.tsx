@@ -36,7 +36,8 @@ function AccountPage() {
 
   const { data: orders, isPending } = useQuery({
     queryKey: ['my-orders', user.email],
-    queryFn: () => listMyOrders({ data: { email: user.email } }),
+    // Sin argumentos: el servidor resuelve el email desde la sesión (D31).
+    queryFn: () => listMyOrders(),
   })
 
   return (

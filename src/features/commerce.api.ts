@@ -19,6 +19,7 @@ import {
   createSessionCookie,
   destroySession,
   getSessionUser,
+  requireSessionUser,
   login as loginService,
   register as registerService,
   type SessionUser,
@@ -139,22 +140,50 @@ export const quoteCart = createServerFn({ method: 'POST' })
 export const placeOrder = createServerFn({ method: 'POST' })
   .validator(placeOrderSchema)
   .handler(async ({ data }): Promise<{ orderNumber: string; total: Money }> => {
-    const order = placeOrderService(data)
+    // Si hay sesión, el pedido se registra a nombre de esa cuenta: el email del
+    // formulario no puede suplantar a otro cliente.
+    const sessionUser = getSessionUser()
+    const order = placeOrderService({
+      ...data,
+      customer: { ...data.customer, email: sessionUser?.email ?? data.customer.email },
+    })
     return { orderNumber: order.number, total: order.totals.total }
   })
 
-export const listMyOrders = createServerFn({ method: 'GET' })
-  .validator(z.object({ email: z.string().email() }))
-  .handler(async ({ data }) => {
-    const { listOrdersByCustomer } = await import('@/server/services/commerce')
-    return listOrdersByCustomer(data.email)
-  })
+/**
+ * Pedidos del usuario autenticado.
+ *
+ * Defecto D31: antes aceptaba un `email` del cliente y devolvía los pedidos de
+ * quien fuera. Ahora **no admite argumentos**: el email sale de la sesión de
+ * servidor, así que no hay nada que manipular desde el navegador.
+ */
+export const listMyOrders = createServerFn({ method: 'GET' }).handler(async () => {
+  const user = requireSessionUser()
+  const { listOrdersByCustomer } = await import('@/server/services/commerce')
+  return listOrdersByCustomer(user.email)
+})
 
+/**
+ * Detalle de un pedido propio.
+ *
+ * Defecto D32: antes era público y devolvía nombre, email y dirección de
+ * cualquiera con solo cambiar el número. Ahora se comprueba la **propiedad**
+ * contra la sesión: un pedido ajeno responde NOT_FOUND (no FORBIDDEN: no se
+ * confirma siquiera que exista).
+ */
 export const getOrder = createServerFn({ method: 'GET' })
-  .validator(z.object({ orderNumber: z.string().min(1) }))
+  .validator(z.object({ orderNumber: z.string().min(8).max(40) }))
   .handler(async ({ data }): Promise<ServerOrder | null> => {
     const { findOrderByNumber } = await import('@/server/services/commerce')
-    return findOrderByNumber(data.orderNumber) ?? null
+    const order = findOrderByNumber(data.orderNumber)
+    if (!order) return null
+
+    const { ownsOrder } = await import('@/server/services/commerce')
+    if (!ownsOrder(order, getSessionUser()?.email)) {
+      // NOT_FOUND y no FORBIDDEN: no se confirma siquiera que el pedido exista.
+      throw new AppError('NOT_FOUND', 'Pedido no encontrado')
+    }
+    return order
   })
 
 // ─── Sesión (defecto D6: la autoridad es el servidor) ────────────────────────
@@ -191,14 +220,6 @@ export const logoutFn = createServerFn({ method: 'POST' }).handler(async () => {
   return { ok: true }
 })
 
-/** Helper para guards de ruta: lanza redirect si no hay sesión. */
-export async function requireUser(): Promise<SessionUser> {
-  const { user } = await getSession()
-  if (!user) {
-    throw new AppError('UNAUTHENTICATED', 'Sesión requerida')
-  }
-  return user
-}
 
 // re-export del tipo SortId para consumers de la API
 export type { SortId }
