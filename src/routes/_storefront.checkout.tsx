@@ -7,7 +7,7 @@ import { placeOrder } from '@/features/commerce.api'
 import { useCartQuote } from '@/features/cart/use-cart-quote'
 import type { ShippingMethodId } from '@/domain/pricing'
 
-export const Route = createFileRoute('/checkout')({
+export const Route = createFileRoute('/_storefront/checkout')({
   head: () => ({ meta: [{ title: 'Checkout — Maison Lumière' }] }),
   component: CheckoutPage,
 })

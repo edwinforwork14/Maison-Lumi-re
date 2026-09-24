@@ -11,7 +11,7 @@ import { formatMoney } from '@/lib/money-format'
 import { getSession, listMyOrders, logoutFn } from '@/features/commerce.api'
 import { EmptyState } from '@/components/ui/EmptyState'
 
-export const Route = createFileRoute('/account')({
+export const Route = createFileRoute('/_storefront/account')({
   // Guard en servidor (plan §4.8): sin sesión no se entra, no hay if en UI.
   beforeLoad: async () => {
     const { user } = await getSession()

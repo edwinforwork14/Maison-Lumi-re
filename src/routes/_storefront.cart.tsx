@@ -6,7 +6,7 @@ import { QuantitySelector } from '@/components/ui/QuantitySelector'
 import { CartSummary } from '@/components/cart/CartSummary'
 import { EmptyState } from '@/components/ui/EmptyState'
 
-export const Route = createFileRoute('/cart')({
+export const Route = createFileRoute('/_storefront/cart')({
   head: () => ({ meta: [{ title: 'Carrito — Maison Lumière' }] }),
   component: CartPage,
 })

@@ -191,14 +191,33 @@ def main():
             )
         except Exception as exc:  # noqa: BLE001
             check("5h. usuarios exige users:manage (el rol admin no lo tiene)", False, str(exc)[:140])
+        # ── 5i. El panel ya NO comparte el chrome de la tienda ───────────────
+        page.goto(f"{BASE}/admin/products", wait_until="domcontentloaded")
+        try:
+            page.wait_for_selector("main", timeout=15_000)
+            page.wait_for_timeout(800)
+            panel_body = page.inner_text("body").upper()
+            storefront_only = "DEVOLUCIONES EXTENDIDAS" in panel_body or "ENVÍO GRATUITO A PARTIR" in panel_body
+            check(
+                "5i. el panel no lleva la cabecera de la tienda (layout separado)",
+                not storefront_only,
+                panel_body[:140],
+            )
+        except Exception as exc:  # noqa: BLE001
+            check("5i. el panel no lleva la cabecera de la tienda (layout separado)", False, str(exc)[:140])
         # ── 6. RBAC en la interfaz: `admin` no lee auditoría ─────────────────
-        page.goto(f"{BASE}/admin/audit", wait_until="networkidle")
-        audit = page.inner_text("main")
-        check(
-            "6. el rol `admin` no puede leer auditoría (FORBIDDEN en UI)",
-            "audit:read" in audit or "permiso" in audit.lower(),
-            audit[:120],
-        )
+        page.goto(f"{BASE}/admin/audit", wait_until="domcontentloaded")
+        # Se espera al MENSAJE, no a un tiempo fijo: la página pinta un estado de
+        # carga antes de que el servidor responda con el permiso denegado.
+        try:
+            page.wait_for_selector("main :text('audit:read')", timeout=15_000)
+            check("6. el rol `admin` no puede leer auditoría (FORBIDDEN en UI)", True)
+        except Exception as exc:  # noqa: BLE001
+            check(
+                "6. el rol `admin` no puede leer auditoría (FORBIDDEN en UI)",
+                False,
+                str(exc)[:120] + " | " + page.inner_text("main")[:120],
+            )
 
         # ── 7. La sesión de tienda no abre el panel ──────────────────────────
         ctx2 = browser.new_context(viewport={"width": 1280, "height": 900})

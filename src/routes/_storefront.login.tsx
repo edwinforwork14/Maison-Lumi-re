@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { loginFn } from '@/features/commerce.api'
 
-export const Route = createFileRoute('/login')({
+export const Route = createFileRoute('/_storefront/login')({
   head: () => ({ meta: [{ title: 'Iniciar sesión — Maison Lumière' }] }),
   component: LoginPage,
 })

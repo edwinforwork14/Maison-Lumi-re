@@ -6,11 +6,6 @@ import {
   HeadContent,
   Scripts,
 } from '@tanstack/react-router'
-import { StoreProvider } from '@/lib/store'
-import { listCategories, listCollections } from '@/features/commerce.api'
-import { Header } from '@/components/layout/Header'
-import { Footer } from '@/components/layout/Footer'
-import { CartDrawer } from '@/components/cart/CartDrawer'
 import '@/styles.css'
 
 const queryClient = new QueryClient({
@@ -49,17 +44,6 @@ export const Route = createRootRoute({
       },
     ],
   }),
-  /**
-   * La navegación (categorías y colecciones) se resuelve en el servidor y se
-   * reparte a la cabecera y el pie: así los enlaces salen en el HTML del SSR y
-   * el catálogo mock deja de viajar al navegador (defecto D34).
-   */
-  loader: async () => ({
-    navigation: {
-      categories: await listCategories(),
-      collections: await listCollections(),
-    },
-  }),
   component: RootComponent,
   notFoundComponent: NotFound,
 })
@@ -75,7 +59,7 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
-  const { navigation } = Route.useLoaderData()
+
   return (
     <html lang="es">
       <head>
@@ -85,17 +69,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
         <a href="#main" className="skip-link">
           Ir al contenido
         </a>
-        <StoreProvider>
-          <div className="flex min-h-screen flex-col">
-            <Header
-              categories={navigation.categories}
-              collections={navigation.collections}
-            />
-            <main id="main" className="flex-1">{children}</main>
-            <Footer categories={navigation.categories} />
-          </div>
-          <CartDrawer />
-        </StoreProvider>
+        {children}
         <Scripts />
       </body>
     </html>

@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store'
 import { ProductGrid } from '@/components/product/ProductGrid'
 import { EmptyState } from '@/components/ui/EmptyState'
 
-export const Route = createFileRoute('/wishlist')({
+export const Route = createFileRoute('/_storefront/wishlist')({
   head: () => ({ meta: [{ title: 'Wishlist — Maison Lumière' }] }),
   component: WishlistPage,
 })

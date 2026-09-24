@@ -26,7 +26,7 @@ interface ShopSearch {
 const asArray = (v: string | string[] | undefined): string[] =>
   v === undefined ? [] : Array.isArray(v) ? v : [v]
 
-export const Route = createFileRoute('/shop')({
+export const Route = createFileRoute('/_storefront/shop')({
   validateSearch: (search: Record<string, unknown>): ShopSearch => ({
     category: typeof search.category === 'string' ? search.category : undefined,
     collection:
@@ -116,7 +116,7 @@ const sorts: { id: SortId; label: string }[] = [
 ]
 
 function ShopPage() {
-  const search = useSearch({ from: '/shop' })
+  const search = useSearch({ from: '/_storefront/shop' })
   const navigate = useNavigate()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const loaderData = Route.useLoaderData()

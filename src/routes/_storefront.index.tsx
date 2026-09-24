@@ -4,7 +4,7 @@ import { ProductGrid } from '@/components/product/ProductGrid'
 import { SectionHeading } from '@/components/ui/SectionHeading'
 import { ButtonLink } from '@/components/ui/Button'
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute('/_storefront/')({
   component: Home,
   head: () => ({
     meta: [

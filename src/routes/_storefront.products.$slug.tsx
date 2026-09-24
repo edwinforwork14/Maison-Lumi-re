@@ -14,7 +14,7 @@ import { ProductGrid } from '@/components/product/ProductGrid'
 import { SectionHeading } from '@/components/ui/SectionHeading'
 import { Badge } from '@/components/ui/Badge'
 
-export const Route = createFileRoute('/products/$slug')({
+export const Route = createFileRoute('/_storefront/products/$slug')({
   loader: async ({ params }) => {
     const [product, categories] = await Promise.all([
       getProductBySlug({ data: { slug: params.slug } }),

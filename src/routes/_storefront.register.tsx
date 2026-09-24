@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { registerFn } from '@/features/commerce.api'
 
-export const Route = createFileRoute('/register')({
+export const Route = createFileRoute('/_storefront/register')({
   head: () => ({ meta: [{ title: 'Crear cuenta — Maison Lumière' }] }),
   component: RegisterPage,
 })
