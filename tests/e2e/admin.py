@@ -53,7 +53,10 @@ def main():
         check("1b. el formulario de acceso está visible", page.locator("#admin-email").is_visible())
 
         # ── 2. Credenciales incorrectas no abren el panel ────────────────────
-        login(page, ADMIN_EMAIL, "contraseña-incorrecta")
+        # Se usa un email INEXISTENTE a propósito: con el limitador activo,
+        # insistir con el email real dejaría la cuenta bloqueada para las
+        # siguientes comprobaciones (y para ejecuciones repetidas del E2E).
+        login(page, "no-existe@maison-lumiere.test", "contraseña-incorrecta")
         body = page.inner_text("body")
         check("2. credenciales inválidas rechazadas", "Credenciales incorrectas" in body)
 

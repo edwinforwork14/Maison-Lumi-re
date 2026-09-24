@@ -8,7 +8,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start'
-import { getCookie, setCookie } from '@tanstack/react-start/server'
+import { getCookie, getRequest, setCookie } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { AppError } from '@/server/errors'
 import {
@@ -50,6 +50,7 @@ import {
   type AdminSettingRow,
   type AdminUserRow,
 } from '@/server/services/admin/content-admin'
+import { createPostgresLoginThrottle } from '@/server/services/admin/login-throttle'
 import { findActiveUserByEmail } from '@/server/db/repositories/sessions.postgres'
 import { verifyPassword } from '@/server/runtime/password-hasher'
 import {
@@ -106,13 +107,37 @@ const credentialsSchema = z.object({
  * Nota de seguridad pendiente (§3): falta el limitador de intentos por IP; el
  * error es genérico a propósito para no revelar si el email existe.
  */
+/** IP del cliente para el limitador (detrás de proxy, la primera de la cadena). */
+function clientIp(): string | null {
+  try {
+    const headers = getRequest().headers
+    const forwarded = headers.get('x-forwarded-for')
+    if (forwarded) return forwarded.split(',')[0]!.trim()
+    return headers.get('x-real-ip') ?? null
+  } catch {
+    return null
+  }
+}
+
 export const adminLogin = createServerFn({ method: 'POST' })
   .validator(credentialsSchema)
   .handler(async ({ data }): Promise<{ userId: string }> => {
+    const throttle = createPostgresLoginThrottle()
+    const ip = clientIp()
+
+    // 1) ¿Puede intentarlo? Se comprueba ANTES de verificar credenciales, para
+    //    que un ataque por diccionario no llegue siquiera al hasher (caro).
+    await throttle.assertAllowed({ scope: 'admin', email: data.email, ip })
+
     const user = await findActiveUserByEmail(data.email)
     if (!user || !verifyPassword(data.password, user.passwordHash)) {
+      await throttle.record({ scope: 'admin', email: data.email, ip, succeeded: false })
       throw new AppError('UNAUTHENTICATED', 'Credenciales incorrectas')
     }
+
+    // 2) Acceso correcto: se registra y se reinicia la ventana de fallos.
+    await throttle.record({ scope: 'admin', email: data.email, ip, succeeded: true })
+    await throttle.clearFailures('admin', data.email)
 
     const sessions = createPostgresSessionsRepository(undefined, resolveSessionSecret())
     const issued = await sessions.issue({ userId: user.id, kind: 'admin' })

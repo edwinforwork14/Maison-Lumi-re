@@ -16,6 +16,7 @@
 
 import { sql } from 'drizzle-orm'
 import {
+  boolean,
   check,
   index,
   pgTable,
@@ -107,6 +108,36 @@ export const sessions = pgTable(
   ],
 )
 
+/**
+ * Intentos de acceso (Plan 02 §3: «CSRF + rate limit en login admin»).
+ *
+ * Se guardan en base y no en memoria porque el limitador debe funcionar con
+ * varios procesos y sobrevivir a un reinicio: si vive en un `Map`, basta
+ * reiniciar para saltárselo.
+ *
+ * Sólo se guarda el email y la IP del intento, nunca la contraseña.
+ */
+export const loginAttempts = pgTable(
+  'login_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Ámbito del intento: `admin` o `storefront`. */
+    scope: text('scope').notNull(),
+    /** Email normalizado (minúsculas) del intento. */
+    email: text('email').notNull(),
+    ip: text('ip'),
+    succeeded: boolean('succeeded').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Consulta del limitador: fallos recientes por email o por IP.
+    index('login_attempts_email_created_idx').on(t.email, t.createdAt),
+    index('login_attempts_ip_created_idx').on(t.ip, t.createdAt),
+    check('login_attempts_scope_check', sql`${t.scope} in ('admin', 'storefront')`),
+    check('login_attempts_email_not_blank_check', sql`length(btrim(${t.email})) > 0`),
+  ],
+)
 // ─── RBAC (defecto D30) ──────────────────────────────────────────────────────
 
 export const roles = pgTable(
