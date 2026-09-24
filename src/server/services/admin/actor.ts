@@ -27,6 +27,9 @@ export interface AdminActor {
 /** Nombre de la cookie de administración (separada de la de tienda). */
 export const ADMIN_SESSION_COOKIE = 'ml.admin.session'
 
+/** TTL de la sesión de administración: 8 h (el panel no dura una semana). */
+export const ADMIN_SESSION_TTL_SECONDS = 60 * 60 * 8
+
 /**
  * Resuelve el actor a partir del valor de la cookie. Devuelve `null` si no hay
  * sesión, si está caducada, si la firma no cuadra o si la sesión **no es de

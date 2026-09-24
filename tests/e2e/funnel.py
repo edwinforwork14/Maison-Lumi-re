@@ -48,8 +48,13 @@ def main():
             "/shop?category=eyewear" in page.url,
             page.url,
         )
-        body = page.inner_text("body")
-        check("1c. lista monturas (Aurora Frame)", "Aurora Frame" in body)
+        # Se espera al CONTENIDO y no a un tiempo fijo: la lista de productos
+        # llega por consulta cliente-servidor y su latencia no es determinista.
+        try:
+            page.wait_for_selector("main :text('Aurora Frame')", timeout=15_000)
+            check("1c. lista monturas (Aurora Frame)", True)
+        except Exception as exc:  # noqa: BLE001
+            check("1c. lista monturas (Aurora Frame)", False, str(exc)[:120])
 
         # ── 2. Filtros cambian la URL y el contador cuadra ───────────────
         # El label envuelve al checkbox; clic en el input dentro del label

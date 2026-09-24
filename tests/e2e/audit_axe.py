@@ -24,6 +24,8 @@ ROUTES = [
     "/login",
     "/register",
     "/wishlist",
+    # Pantalla pública del panel: la auditoría cubre también la capa nueva.
+    "/admin/login",
 ]
 VIEWPORTS = [(1440, 900), (1280, 800), (1024, 768), (768, 1024), (390, 844)]
 BLOCKING_IMPACTS = {"critical", "serious"}
