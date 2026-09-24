@@ -30,7 +30,7 @@ import { ALL_PERMISSIONS, type RoleKey } from '../../src/server/services/admin/p
  * `admin` (que no tiene `users:manage`) no pueda tocar usuarios.
  */
 
-const url = process.env.DATABASE_URL
+const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
 if (!url) console.warn('[tests/db/content-admin] DATABASE_URL no definida: suite omitida.')
 const suite = url ? describe : describe.skip
 

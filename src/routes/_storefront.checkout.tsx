@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@/lib/store'
 import { formatMoney } from '@/lib/money-format'
 import { isZero, type Money } from '@/domain/money'
-import { placeOrder } from '@/features/commerce.api'
+import { getSiteSettings, placeOrder, type CartQuote } from '@/features/commerce.api'
 import { useCartQuote } from '@/features/cart/use-cart-quote'
+import { buildWhatsAppOrderLink } from '@/lib/whatsapp'
 import type { ShippingMethodId } from '@/domain/pricing'
 
 export const Route = createFileRoute('/_storefront/checkout')({
@@ -45,6 +47,9 @@ function CheckoutPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null)
   const [placedTotal, setPlacedTotal] = useState<Money | null>(null)
+  // La cotización del pedido se guarda ANTES de vaciar el carrito: sin ella no
+  // se puede construir el resumen que se envía por WhatsApp.
+  const [placedQuote, setPlacedQuote] = useState<CartQuote | null>(null)
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -60,6 +65,12 @@ function CheckoutPage() {
 
   // Fuente única de verdad del dinero: el servidor cotiza subtotal, envío y total.
   const { quote, isLoading } = useCartQuote(shipping)
+  // Ajustes del sitio: incluye el WhatsApp con el que se cierra la compra.
+  const { data: settings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => getSiteSettings(),
+    staleTime: 5 * 60_000,
+  })
 
   // Líneas cuya cantidad pedida supera el stock real del SKU (D18).
   const oversold = (quote?.lines ?? []).filter((l) => l.quantity > l.availableStock)
@@ -110,6 +121,7 @@ function CheckoutPage() {
       })
       setPlacedOrderNumber(result.orderNumber)
       setPlacedTotal(result.total)
+      setPlacedQuote(quote ?? null) // la cotización vigente al confirmar
       clearCart()
     } catch (err) {
       setSubmitError(
@@ -121,6 +133,27 @@ function CheckoutPage() {
       setSubmitting(false)
     }
   }
+
+  // Enlace de WhatsApp con el resumen ya escrito: es el cierre real del pedido,
+  // porque la tienda no cobra en línea.
+  const summaryQuote = placedQuote ?? quote
+  const whatsappLink =
+    summaryQuote && placedOrderNumber && settings
+      ? buildWhatsAppOrderLink(
+          {
+            phone: settings.whatsappPhone ?? '',
+            displayName: settings.whatsappName ?? 'Maison Lumière',
+          },
+          {
+            orderNumber: placedOrderNumber,
+            customerName: `${form.firstName} ${form.lastName}`.trim(),
+            city: form.city,
+            shippingLabel:
+              summaryQuote.shippingOptions.find((o) => o.id === shipping)?.label ?? shipping,
+            quote: summaryQuote,
+          },
+        )
+      : null
 
   // ─── Pantalla de éxito ───
   if (placedOrderNumber) {
@@ -137,7 +170,8 @@ function CheckoutPage() {
           sido registrado correctamente.
         </p>
         <p className="mb-10 text-sm text-taupe">
-          Enviaremos la confirmación a {form.email}.
+          Le hemos reservado las piezas. Cierre el pedido por WhatsApp y lo
+          confirmamos desde la tienda; también puede escribirnos desde {form.email}.
         </p>
         <div className="mx-auto mb-10 max-w-sm bg-sand p-8 text-left text-sm">
           <p className="mb-4 eyebrow">Resumen</p>
@@ -155,6 +189,21 @@ function CheckoutPage() {
             </span>
           </div>
         </div>
+        {whatsappLink ? (
+          <a
+            href={whatsappLink.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-solid btn-block label-wide mb-3"
+          >
+            Confirmar por WhatsApp
+          </a>
+        ) : (
+          <p className="mb-3 text-xs text-taupe">
+            El número de WhatsApp de la tienda no está configurado todavía.
+          </p>
+        )}
+
         <Link to="/shop" className="btn btn-outline px-10 py-4 label-wide">
           Continuar comprando
         </Link>
@@ -391,7 +440,7 @@ function CheckoutPage() {
               {submitting ? 'Procesando…' : 'Confirmar pedido'}
             </button>
             <p className="mt-4 text-center text-[11px] text-taupe">
-              Pago simulado — sin cargo real
+              Sin pago en línea: el pedido se confirma por WhatsApp
             </p>
           </div>
         </aside>

@@ -28,7 +28,7 @@ import type { RoleKey } from '../../src/server/services/admin/permissions.ts'
  * árbol de categorías y slug repetido en el mismo nivel.
  */
 
-const url = process.env.DATABASE_URL
+const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
 if (!url) console.warn('[tests/db/catalog-admin] DATABASE_URL no definida: suite omitida.')
 const suite = url ? describe : describe.skip
 

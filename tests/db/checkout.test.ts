@@ -17,7 +17,7 @@ import { InsufficientStockError } from '../../src/server/db/repositories/invento
  * obligatorio y la idempotencia con huella del payload.
  */
 
-const url = process.env.DATABASE_URL
+const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
 if (!url) {
   console.warn('[tests/db/checkout] DATABASE_URL no definida: suite omitida. Usa `npm run test:db`.')
 }

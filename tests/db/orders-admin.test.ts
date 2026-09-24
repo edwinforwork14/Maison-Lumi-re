@@ -26,7 +26,7 @@ import { PERMISSIONS, type RoleKey } from '../../src/server/services/admin/permi
  * superar lo cobrado y la PII exige un permiso aparte que deja traza.
  */
 
-const url = process.env.DATABASE_URL
+const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
 if (!url) {
   console.warn('[tests/db/orders-admin] DATABASE_URL no definida: suite omitida.')
 }

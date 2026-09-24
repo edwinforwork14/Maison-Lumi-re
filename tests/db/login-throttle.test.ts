@@ -16,7 +16,7 @@ import {
  * en base de datos, incluida la ventana temporal y el reinicio al acertar.
  */
 
-const url = process.env.DATABASE_URL
+const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
 if (!url) console.warn('[tests/db/login-throttle] DATABASE_URL no definida: suite omitida.')
 const suite = url ? describe : describe.skip
 

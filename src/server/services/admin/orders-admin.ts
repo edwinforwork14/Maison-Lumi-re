@@ -19,6 +19,8 @@ import { customers, users } from '../../db/schema/identity.ts'
 import { orderItems, orderStatusHistory, orders } from '../../db/schema/orders.ts'
 import { payments } from '../../db/schema/payments.ts'
 import { createPostgresAuditRepository } from '../../db/repositories/audit.postgres.ts'
+import { createPostgresInventoryRepository } from '../../db/repositories/inventory.postgres.ts'
+import { inventoryReservations } from '../../db/schema/inventory.ts'
 import { AppError } from '../../errors.ts'
 import { assertPermission, type AdminActor } from './actor.ts'
 import { PERMISSIONS } from './permissions.ts'
@@ -281,6 +283,25 @@ export async function updateAdminOrderStatus(
     })
 
     return { from, to: input.to }
+  }).then(async (result) => {
+    // Confirmar el pedido (por WhatsApp) es lo que compromete el stock: sin
+    // pasarela, la reserva se crea al comprar y se consolida aquí.
+    if (input.to === 'paid' || input.to === 'fulfilled') {
+      const held = await db
+        .select({ id: inventoryReservations.id })
+        .from(inventoryReservations)
+        .where(
+          and(
+            eq(inventoryReservations.orderId, input.id),
+            eq(inventoryReservations.status, 'held'),
+          ),
+        )
+      const inventory = createPostgresInventoryRepository(db)
+      for (const reservation of held) {
+        await inventory.commit(reservation.id, actor!.userId)
+      }
+    }
+    return result
   })
 }
 

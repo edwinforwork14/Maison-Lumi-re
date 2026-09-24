@@ -26,7 +26,7 @@ import { PERMISSIONS, type RoleKey } from '../../src/server/services/admin/permi
  * deja auditoría y que los KPIs salen de SQL real.
  */
 
-const url = process.env.DATABASE_URL
+const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
 if (!url) {
   console.warn('[tests/db/admin] DATABASE_URL no definida: suite omitida. Usa `npm run test:db`.')
 }

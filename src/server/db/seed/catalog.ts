@@ -24,7 +24,7 @@
  */
 
 import { createHash, scryptSync, timingSafeEqual } from 'node:crypto'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { shippingMethods as shippingMethodData } from '../../../data/shipping.ts'
 import { categorySeeds, collectionSeeds, productSeeds } from '../../seed/catalog.ts'
 import type { Database } from '../client.ts'
@@ -456,6 +456,10 @@ export const SITE_SETTING_SEEDS = [
   { key: 'site.currency', value: 'EUR', type: 'string' },
   { key: 'site.locale', value: 'es-ES', type: 'string' },
   { key: 'shipping.free_threshold_cents', value: FREE_SHIPPING_THRESHOLD_CENTS, type: 'number' },
+  // Contacto de WhatsApp: es el cierre de la compra, porque la tienda no cobra
+  // en línea. Se cambia desde el panel (Ajustes) sin tocar código.
+  { key: 'contact.whatsapp', value: '34600111222', type: 'string' },
+  { key: 'contact.whatsapp_name', value: 'Atención Maison Lumière', type: 'string' },
 ] as const
 
 async function upsertSiteSettings(tx: Tx, adminId: string): Promise<number> {
@@ -488,7 +492,7 @@ async function upsertAdmin(
   tx: Tx,
   password: string,
 ): Promise<{ users: number; roles: number }> {
-  const roleId = deterministicId('role', 'admin')
+  let roleId = deterministicId('role', 'admin')
   const userId = deterministicId('user', DEV_ADMIN_EMAIL)
 
   await tx
@@ -500,7 +504,7 @@ async function upsertAdmin(
       description: 'Acceso completo al panel de administración',
     })
     .onConflictDoUpdate({
-      target: roles.id,
+      target: roles.key,
       set: {
         key: sql`excluded.key`,
         name: sql`excluded.name`,
@@ -508,6 +512,16 @@ async function upsertAdmin(
         updatedAt: sql`now()`,
       },
     })
+
+  // El id del rol se RESUELVE por su clave natural: otra semilla (RBAC) puede
+  // haberlo creado con otro id, y usar el determinista rompería la FK de
+  // `user_roles` al ejecutar ambas semillas seguidas.
+  const [existingRole] = await tx
+    .select({ id: roles.id })
+    .from(roles)
+    .where(eq(roles.key, 'admin'))
+    .limit(1)
+  if (existingRole) roleId = existingRole.id
 
   await tx
     .insert(users)

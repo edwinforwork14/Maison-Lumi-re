@@ -301,3 +301,25 @@ export type { SortId }
  * superficie pública que es este archivo.
  */
 export type { CartQuote, QuoteLine, ShippingOptionQuote } from '@/server/services/commerce'
+
+// ─── Ajustes del sitio que consume la tienda ────────────────────────────────
+
+export interface SiteSettings {
+  readonly currency: string
+  readonly locale: string
+  readonly freeShippingThresholdCents: number
+  readonly whatsappPhone: string | null
+  readonly whatsappName: string | null
+}
+
+/**
+ * Ajustes públicos del sitio (los edita el panel en «Ajustes»). El número de
+ * WhatsApp es parte del flujo de compra: sin pasarela de pago, el pedido se
+ * cierra por esa vía.
+ */
+export const getSiteSettings = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<SiteSettings> => {
+    const { readPublicSettings } = await import('@/server/services/storefront-orders')
+    return readPublicSettings()
+  },
+)

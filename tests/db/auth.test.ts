@@ -23,7 +23,7 @@ import { createPostgresAuditRepository } from '../../src/server/db/repositories/
  * traza en `audit_logs`.
  */
 
-const url = process.env.DATABASE_URL
+const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
 if (!url) {
   console.warn('[tests/db/auth] DATABASE_URL no definida: suite omitida. Usa `npm run test:db`.')
 }

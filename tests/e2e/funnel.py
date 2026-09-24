@@ -129,6 +129,13 @@ def main():
         success = page.inner_text("body")
         order_ok = re.search(r"ML-[A-Z0-9]+(?:-[A-Z0-9]+)?", success) is not None
         check("7a. pantalla de éxito con número ML-…", order_ok)
+        # Sin pasarela de pago, el cierre es un enlace de WhatsApp con el resumen.
+        wa_links = page.locator("a[href^='https://wa.me/']").count()
+        check(
+            "7a-bis. el pedido se cierra por WhatsApp",
+            wa_links >= 1,
+            "enlaces wa.me=" + str(wa_links) + " | texto: " + page.inner_text("main")[:220].replace("\n", " "),
+        )
         page.goto(f"{BASE}/cart", wait_until="networkidle")
         check("7b. carrito queda vacío", "está vacío" in page.inner_text("main"))
 

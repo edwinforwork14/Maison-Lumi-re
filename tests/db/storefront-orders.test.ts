@@ -19,7 +19,7 @@ import {
  * está acotada al titular (el filtro va en SQL).
  */
 
-const url = process.env.DATABASE_URL
+const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
 if (!url) console.warn('[tests/db/storefront-orders] DATABASE_URL no definida: suite omitida.')
 const suite = url ? describe : describe.skip
 
@@ -137,17 +137,48 @@ if (url) {
       assert.match(placed.orderNumber, /^ML-\d+$/, 'el número va por secuencia')
       assert.equal(placed.total.amount, quote.total.amount)
       assert.equal(quote.subtotal.amount, 30_000)
-      assert.equal(placed.reservationsCommitted, 1)
+      assert.equal(placed.reservationIds.length, 1)
+
+      // Sin pasarela no se vende todavía: se RESERVA. El stock queda bloqueado
+      // (no disponible) pero no descontado hasta que la tienda confirme.
+      const stock = await stockOf(seeded.variantId)
+      assert.equal(stock.onHand, 4, 'on_hand no baja al comprar')
+      assert.equal(stock.reserved, 2, 'las 2 unidades quedan reservadas')
+      assert.ok(new Date(placed.reservedUntil).getTime() > Date.now())
+
+      const movements = await client<{ delta: string; reason: string }[]>`
+        SELECT delta, reason FROM inventory_movements WHERE variant_id = ${seeded.variantId}`
+      assert.equal(movements.length, 0, 'todavía no hay movimiento de salida')
+    })
+
+    it('confirmar el pedido (por WhatsApp, desde el panel) descuenta el stock', async () => {
+
+      const seeded = await seedSellableVariant(2, 12_000)
+      const email = `sf-${token()}@example.com`
+      const placed = await placeStorefrontOrder({
+        email,
+        lines: [{ productId: seeded.productId, color: 'Negro', quantity: 1 }],
+        customer: customer(email),
+        idempotencyKey: crypto.randomUUID(),
+      })
+
+      // Se compromete la reserva, que es lo que hace el panel al confirmar.
+      const { createPostgresInventoryRepository } = await import(
+        '../../src/server/db/repositories/inventory.postgres.ts'
+      )
+      const inventory = createPostgresInventoryRepository(db)
+      await inventory.commit(placed.reservationIds[0]!)
 
       const stock = await stockOf(seeded.variantId)
-      assert.equal(stock.onHand, 2, 'el stock baja de verdad')
-      assert.equal(stock.reserved, 0, 'la reserva se compromete, no queda colgada')
+      assert.equal(stock.onHand, 1, 'on_hand baja al confirmar')
+      assert.equal(stock.reserved, 0)
 
       const movements = await client<{ delta: string; reason: string }[]>`
         SELECT delta, reason FROM inventory_movements WHERE variant_id = ${seeded.variantId}`
       assert.equal(movements.length, 1)
-      assert.equal(Number(movements[0]!.delta), -2)
+      assert.equal(Number(movements[0]!.delta), -1)
       assert.equal(movements[0]!.reason, 'order')
+
     })
 
     it('no se puede comprar más de lo que hay', async () => {

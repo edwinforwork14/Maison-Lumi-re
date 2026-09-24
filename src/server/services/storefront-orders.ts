@@ -35,7 +35,6 @@ import { orderItems, orders as ordersTable } from '../db/schema/orders.ts'
 import { productMedia, productVariants, products } from '../db/schema/catalog.ts'
 import { shippingMethods as shippingMethodsTable } from '../db/schema/shipping.ts'
 import { siteSettings } from '../db/schema/content.ts'
-import { createPostgresInventoryRepository } from '../db/repositories/inventory.postgres.ts'
 import { placeOrderTransactional } from '../db/repositories/orders.postgres.ts'
 import { AppError } from '../errors.ts'
 import type { CartQuote, QuoteLine, ShippingOptionQuote } from './commerce.ts'
@@ -48,6 +47,12 @@ export interface StorefrontLine {
 
 const MAX_QUANTITY_PER_LINE = 99
 const DEFAULT_FREE_SHIPPING_THRESHOLD_CENTS = 50_000
+
+/**
+ * TTL de la reserva de un pedido de la tienda: la confirmación por WhatsApp
+ * puede tardar, así que se bloquea el stock 48 h en lugar de 15 minutos.
+ */
+const STOREFRONT_RESERVATION_TTL_SECONDS = 60 * 60 * 48
 
 /** Métodos de envío y umbral de gratuidad tal como están configurados. */
 export async function readShippingConfig(db: Database = getDb()): Promise<{
@@ -231,8 +236,10 @@ export interface PlacedStorefrontOrder {
   readonly orderNumber: string
   readonly total: Money
   readonly status: string
-  /** Movimientos comprometidos: el stock ya bajó al confirmar el pago simulado. */
-  readonly reservationsCommitted: number
+  /** Reservas creadas: bloquean el stock para que no se venda dos veces. */
+  readonly reservationIds: readonly string[]
+  /** Hasta cuándo está bloqueado el stock si la tienda no confirma. */
+  readonly reservedUntil: string
 }
 
 /**
@@ -286,22 +293,22 @@ export async function placeStorefrontOrder(
       },
       shippingMethodId: await resolveShippingMethodId(input.shippingMethod, db),
       idempotencyKey: input.idempotencyKey,
+      reservationTtlSeconds: STOREFRONT_RESERVATION_TTL_SECONDS,
     },
     db,
   )
 
-  const inventory = createPostgresInventoryRepository(db)
-  let committed = 0
-  for (const reservationId of placed.reservationIds) {
-    await inventory.commit(reservationId)
-    committed += 1
-  }
-
+  // Sin pasarela de pago el compromiso NO se hace aquí: el stock queda reservado
+  // (bloqueado, no vendido) y la tienda lo compromete al confirmar el pedido por
+  // WhatsApp desde el panel. Así una conversación que no llega a nada caduca sola.
   return {
     orderNumber: placed.number,
     total: money(placed.totalCents),
     status: placed.status,
-    reservationsCommitted: committed,
+    reservationIds: placed.reservationIds,
+    reservedUntil: new Date(
+      Date.now() + STOREFRONT_RESERVATION_TTL_SECONDS * 1_000,
+    ).toISOString(),
   }
 }
 
@@ -418,5 +425,44 @@ export async function findStorefrontOrderForOwner(
       unitPrice: money(line.unitPriceCents),
       lineTotal: money(line.lineTotalCents),
     })),
+  }
+}
+
+export interface PublicSettings {
+  readonly currency: string
+  readonly locale: string
+  readonly freeShippingThresholdCents: number
+  readonly whatsappPhone: string | null
+  readonly whatsappName: string | null
+}
+
+/** Ajustes que puede leer la tienda (nada de secretos: son valores públicos). */
+export async function readPublicSettings(db: Database = getDb()): Promise<PublicSettings> {
+  const rows = await db
+    .select({ key: siteSettings.key, value: siteSettings.value })
+    .from(siteSettings)
+    .where(
+      inArray(siteSettings.key, [
+        'site.currency',
+        'site.locale',
+        'shipping.free_threshold_cents',
+        'contact.whatsapp',
+        'contact.whatsapp_name',
+      ]),
+    )
+  const byKey = new Map(rows.map((row) => [row.key, row.value]))
+  const threshold = Number(
+    byKey.get('shipping.free_threshold_cents') ?? DEFAULT_FREE_SHIPPING_THRESHOLD_CENTS,
+  )
+  const phone = byKey.get('contact.whatsapp')
+  const name = byKey.get('contact.whatsapp_name')
+  return {
+    currency: String(byKey.get('site.currency') ?? 'EUR'),
+    locale: String(byKey.get('site.locale') ?? 'es-ES'),
+    freeShippingThresholdCents: Number.isFinite(threshold)
+      ? threshold
+      : DEFAULT_FREE_SHIPPING_THRESHOLD_CENTS,
+    whatsappPhone: typeof phone === 'string' ? phone : null,
+    whatsappName: typeof name === 'string' ? name : null,
   }
 }

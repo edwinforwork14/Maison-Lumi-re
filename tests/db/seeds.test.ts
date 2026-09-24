@@ -32,7 +32,7 @@ import { categorySeeds, collectionSeeds, productSeeds } from '../../src/server/s
  *   DATABASE_URL=postgres://ml:...@localhost:5433/maison_lumiere npm run test:db
  */
 
-const url = process.env.DATABASE_URL
+const url = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
 if (!url) {
   console.warn(
     '[tests/db] DATABASE_URL no definida: la suite de seeds se omite. Ejecútala con `npm run test:db`.',
