@@ -1,12 +1,19 @@
-import type { Product } from '@/data/types'
+import type { Product } from '@/domain/catalog/types'
 import { ProductCard } from './ProductCard'
 
+/**
+ * Rejilla de la referencia (Plan 04 §2.7): **a sangre** (sin gutter entre
+ * tarjetas), 2 columnas en móvil y 4 ≥768 px. La separación visual la aporta
+ * el padding interno de cada tarjeta, no el gap.
+ */
 export function ProductGrid({ products }: { products: Product[] }) {
   return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 md:gap-x-8 lg:grid-cols-4">
+    <ul className="grid grid-cols-2 md:grid-cols-4">
       {products.map((p) => (
-        <ProductCard key={p.id} product={p} />
+        <li key={p.id} className="min-w-0">
+          <ProductCard product={p} />
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }

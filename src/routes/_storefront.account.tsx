@@ -9,6 +9,7 @@ import {
 import { useStore } from '@/lib/store'
 import { formatMoney } from '@/lib/money-format'
 import { getSession, listMyOrders, logoutFn } from '@/features/commerce.api'
+import { queryKeys } from '@/features/model/queries'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 export const Route = createFileRoute('/_storefront/account')({
@@ -35,7 +36,7 @@ function AccountPage() {
   const router = useRouter()
 
   const { data: orders, isPending } = useQuery({
-    queryKey: ['my-orders', user.email],
+    queryKey: queryKeys.myOrders(),
     // Sin argumentos: el servidor resuelve el email desde la sesión (D31).
     queryFn: () => listMyOrders(),
   })
@@ -44,11 +45,11 @@ function AccountPage() {
     <div className="mx-auto max-w-4xl animate-fade-in px-4 py-14 md:px-8 md:py-20">
       <div className="mb-12 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-2 label-wide tracking-[0.3em] text-taupe">Mi cuenta</p>
-          <h1 className="font-serif text-4xl font-light">
+          <p className="mb-2 label-wide tracking-[0.3em] text-text-secondary">Mi cuenta</p>
+          <h1 className="editorial-title">
             {user.firstName} {user.lastName}
           </h1>
-          <p className="mt-1 text-sm text-taupe">{user.email}</p>
+          <p className="mt-1 text-sm text-text-secondary">{user.email}</p>
         </div>
         <button
           type="button"
@@ -63,23 +64,23 @@ function AccountPage() {
               await navigate({ to: '/' })
             }
           }}
-          className="label text-taupe underline-offset-4 hover:text-ink hover:underline"
+          className="label text-text-secondary underline-offset-4 hover:text-strong hover:underline"
         >
           Cerrar sesión
         </button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <section className="border border-linen p-8">
+        <section className="border border-line p-8">
           <h2 className="mb-3 eyebrow">Pedidos</h2>
           {isPending ? (
             <div aria-busy="true" className="space-y-3">
-              <p className="text-sm text-taupe">Cargando sus pedidos…</p>
+              <p className="text-sm text-text-secondary">Cargando sus pedidos…</p>
               <div className="skeleton h-12 w-full" />
             </div>
           ) : (orders?.length ?? 0) === 0 ? (
             <>
-              <p className="mb-6 text-sm text-taupe">
+              <p className="mb-6 text-sm text-text-secondary">
                 Sus pedidos aparecerán aquí después de la primera compra.
               </p>
               <EmptyState
@@ -89,13 +90,13 @@ function AccountPage() {
               />
             </>
           ) : (
-            <ul className="divide-y divide-linen">
+            <ul className="divide-y divide-line">
               {(orders ?? []).map((order) => (
                 <li key={order.number} className="py-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm">{order.number}</p>
-                      <p className="text-xs text-taupe">
+                      <p className="text-xs text-text-secondary">
                         {new Date(order.createdAt).toLocaleDateString('es-ES')} ·{' '}
                         {order.itemsCount}{' '}
                         {order.itemsCount === 1 ? 'pieza' : 'piezas'}
@@ -111,11 +112,11 @@ function AccountPage() {
           )}
         </section>
 
-        <section className="border border-linen p-8">
+        <section className="border border-line p-8">
           <h2 className="mb-3 eyebrow">Wishlist</h2>
           {wishlist.length > 0 ? (
             <>
-              <p className="mb-6 text-sm text-taupe">
+              <p className="mb-6 text-sm text-text-secondary">
                 Tiene {wishlist.length}{' '}
                 {wishlist.length === 1 ? 'pieza guardada' : 'piezas guardadas'}.
               </p>

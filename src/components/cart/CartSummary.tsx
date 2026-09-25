@@ -20,7 +20,7 @@ interface CartSummaryProps {
 
 export function CartSummary({ totals, shippingLabel, cta }: CartSummaryProps) {
   return (
-    <div className="bg-sand p-8">
+    <div className="bg-subtle p-8">
       <h2 className="mb-6 eyebrow">Resumen del pedido</h2>
       <dl className="space-y-3 text-sm">
         <div className="flex justify-between">
@@ -33,7 +33,7 @@ export function CartSummary({ totals, shippingLabel, cta }: CartSummaryProps) {
             {isZero(totals.shipping) ? 'Gratuito' : formatMoney(totals.shipping)}
           </dd>
         </div>
-        <div className="flex justify-between border-t border-linen pt-3 text-base">
+        <div className="flex justify-between border-t border-line pt-3 text-base">
           <dt className="uppercase tracking-[0.15em]">Total</dt>
           <dd className="font-medium tabular-nums">{formatMoney(totals.total)}</dd>
         </div>

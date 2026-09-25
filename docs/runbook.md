@@ -31,12 +31,12 @@ Regla: los secretos jamás llegan al bundle cliente; verificar con
 ## 3. Comandos operativos
 
 ```bash
-npm ci                 # instalación limpia (CI/producción)
-npm run verify         # typecheck + tests + build  (gate obligatorio)
-npm run build          # genera dist/client/ y dist/server/server.js
-npm start              # sirve producción en :3000 (scripts/start.mjs)
-npm run dev            # desarrollo
-npm test               # 42 unitarios de dominio (node:test)
+pnpm install --frozen-lockfile                 # instalación limpia (CI/producción)
+pnpm verify         # typecheck + tests + build  (gate obligatorio)
+pnpm build          # genera dist/client/ y dist/server/server.js
+pnpm start              # sirve producción en :3000 (scripts/start.mjs)
+pnpm dev            # desarrollo
+pnpm test               # 42 unitarios de dominio (node:test)
 ```
 
 ### Comprobación post-despliegue (smoke test)
@@ -63,7 +63,7 @@ debe devolver ≥ 1.
 
 ### 5.1 Síntoma: la app responde 000 / conexión rechazada
 
-1. `npm run build && npm start` de nuevo; revisar que el log muestre
+1. `pnpm build && pnpm start` de nuevo; revisar que el log muestre
    `Maison Lumière → http://0.0.0.0:3000`.
 2. En Windows, comprobar que no queda un proceso Node colgado del test
    anterior (`taskkill //F //IM node.exe` con precaución).
@@ -96,7 +96,7 @@ activar el adaptador postgres del puerto `OrderRepository`.
 2. Desplegar de nuevo desde ese commit:
    ```bash
    git checkout <commit-sano>
-   npm ci && npm run build && npm start
+   pnpm install --frozen-lockfile && pnpm build && ppnpm start
    ```
 3. Verificar con el smoke test de §3.
 4. Registrar el incidente y la causa raíz en el PR de hotfix.
@@ -117,6 +117,6 @@ Las semillas viven en `src/data/*` (legacy) y `src/server/seed/catalog.ts`
 1. Añadir la semilla en `src/data/products.ts` (nombre, slug, precio, colores,
    stock, materiales, colección, categoría).
 2. Las variantes/SKU se generan automáticamente en `server/seed/catalog.ts`.
-3. Ejecutar `npm test`: los tests de caracterización validan los invariantes
+3. Ejecutar `pnpm test`: los tests de caracterización validan los invariantes
    (28 productos hoy; actualizar los conteos si cambia el catálogo).
-4. `npm run verify` y PR.
+4. `pnpm verify` y PR.

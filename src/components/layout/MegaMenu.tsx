@@ -1,9 +1,10 @@
-import { Link } from '@tanstack/react-router'
 /**
  * Datos de navegación mínimos que el layout inyecta. Antes este componente
- * importaba los mocks de `@/data`, lo que metía el catálogo entero en el bundle
+ * importaba los mocks de datos del catálogo, lo que metía el catálogo entero en el bundle
  * del navegador (defecto D34); ahora los recibe ya resueltos por el servidor.
  */
+import type { MegaFilters } from './mega-menu.data'
+
 export interface NavCategory {
   id: string
   name: string
@@ -17,9 +18,11 @@ export interface NavCollection {
 export interface NavSection {
   label: string
   to: string
+  /** Filtro de catálogo que representa la sección (dropdown multinivel §3). */
+  filters?: MegaFilters
   sections: {
     title: string
-    links: { label: string; to: string }[]
+    links: { label: string; to: string; filters?: MegaFilters }[]
   }[]
   highlight?: { title: string; text: string; to: string; cta: string }
 }
@@ -32,13 +35,14 @@ export function buildNavSections(
   {
     label: 'Novedades',
     to: '/shop',
+    filters: { sort: 'new' },
     sections: [
       {
         title: 'Descubrir',
         links: [
-          { label: 'Todo el catálogo', to: '/shop' },
-          { label: 'Nuevos ingresos', to: '/shop?sort=new' },
-          { label: 'Bestsellers', to: '/shop?sort=bestsellers' },
+          { label: 'Todo el catálogo', to: '/shop', filters: {} },
+          { label: 'Nuevos ingresos', to: '/shop?sort=new', filters: { sort: 'new' } },
+          { label: 'Bestsellers', to: '/shop?sort=bestsellers', filters: { sort: 'bestsellers' } },
         ],
       },
       {
@@ -46,6 +50,7 @@ export function buildNavSections(
         links: collections.map((c) => ({
           label: c.name,
           to: `/shop?collection=${c.id}`,
+          filters: { collection: c.id },
         })),
       },
     ],
@@ -59,14 +64,16 @@ export function buildNavSections(
   ...categories.map((cat) => ({
     label: cat.name,
     to: `/shop?category=${cat.id}`,
+    filters: { category: cat.id },
     sections: [
       {
         title: cat.name,
         links: [
-          { label: `Todo ${cat.name.toLowerCase()}`, to: `/shop?category=${cat.id}` },
+          { label: `Todo ${cat.name.toLowerCase()}`, to: `/shop?category=${cat.id}`, filters: { category: cat.id } },
           ...collections.map((c) => ({
             label: c.name,
             to: `/shop?category=${cat.id}&collection=${c.id}`,
+            filters: { category: cat.id, collection: c.id },
           })),
         ],
       },
@@ -75,15 +82,15 @@ export function buildNavSections(
         links:
           cat.id === 'eyewear'
             ? [
-                { label: 'Acetato', to: '/shop?category=eyewear&material=Acetato' },
-                { label: 'Metal', to: '/shop?category=eyewear&material=Metal' },
+                { label: 'Acetato', to: '/shop?category=eyewear&material=Acetato', filters: { category: 'eyewear', material: 'Acetato' } },
+                { label: 'Metal', to: '/shop?category=eyewear&material=Metal', filters: { category: 'eyewear', material: 'Metal' } },
               ]
             : cat.id === 'accessories'
               ? [
-                  { label: 'Seda', to: '/shop?category=accessories&material=Tela' },
-                  { label: 'Cuero', to: '/shop?category=accessories&material=Cuero' },
+                  { label: 'Seda', to: '/shop?category=accessories&material=Tela', filters: { category: 'accessories', material: 'Tela' } },
+                  { label: 'Cuero', to: '/shop?category=accessories&material=Cuero', filters: { category: 'accessories', material: 'Cuero' } },
                 ]
-              : [{ label: 'Cuero', to: `/shop?category=${cat.id}&material=Cuero` }],
+              : [{ label: 'Cuero', to: `/shop?category=${cat.id}&material=Cuero`, filters: { category: cat.id, material: 'Cuero' } }],
       },
     ],
     highlight: {
@@ -97,50 +104,8 @@ export function buildNavSections(
 }
 
 /**
- * Panel del mega menú (plan.md D1): visible por hover y por foco gracias a
- * la variante group-nav + focus-within; operable solo con teclado.
+ * Modelo de navegación del chrome (Plan 04 §7.2): los tipos y el builder se
+ * CONSERVAN —los consume `MenuModal`, el `MegaDropdown` y el layout—; cada
+ * sección/enlace lleva además su `filters` tipado para que el dropdown cargue
+ * productos reales sin parsear URLs (brief §8).
  */
-export function MegaMenu({ section }: { section: NavSection }) {
-  return (
-    <div
-      className="absolute inset-x-0 top-full hidden border-b border-linen bg-ivory shadow-[0_20px_40px_-20px_rgba(26,24,21,0.15)] group-nav:block animate-fade-in"
-      aria-label={`Sección ${section.label}`}
-    >
-      <div className="mx-auto grid max-w-7xl grid-cols-12 gap-10 px-8 py-12">
-        {section.sections.map((s) => (
-          <div key={s.title} className="col-span-3">
-            <p className="eyebrow mb-4">{s.title}</p>
-            <ul className="space-y-3">
-              {s.links.map((l) => (
-                <li key={l.label}>
-                  <Link
-                    to={l.to}
-                    className="text-sm text-charcoal transition-colors hover:text-taupe"
-                  >
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-        {section.highlight && (
-          <Link
-            to={section.highlight.to}
-            className="group-hl col-span-4 col-start-9 block"
-          >
-            <div className="bg-sand p-8 transition-colors group-hover:bg-linen">
-              <p className="mb-2 font-serif text-2xl font-light">
-                {section.highlight.title}
-              </p>
-              <p className="mb-6 text-sm text-taupe">{section.highlight.text}</p>
-              <span className="label underline underline-offset-4">
-                {section.highlight.cta} →
-              </span>
-            </div>
-          </Link>
-        )}
-      </div>
-    </div>
-  )
-}

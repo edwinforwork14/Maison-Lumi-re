@@ -13,21 +13,22 @@ function isLink(
   return 'linkProps' in action
 }
 
+/** Estado vacío con la tipografía de la referencia: sin serif, cuerpo 13 px. */
 export function EmptyState({ title, message, action }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center py-24 text-center">
-      <p className="mb-3 font-serif text-2xl font-light">{title}</p>
-      <p className="mb-8 max-w-sm text-sm text-taupe">{message}</p>
+      <p className="mb-3 text-[1.0625rem] font-medium uppercase tracking-[-0.03em]">{title}</p>
+      <p className="body-text mb-8 max-w-sm text-text-secondary">{message}</p>
       {action &&
         (isLink(action) ? (
-          <Link {...action.linkProps} className="btn btn-outline px-8 py-3 label">
+          <Link {...action.linkProps} className="btn btn-outline label">
             {action.label}
           </Link>
         ) : (
           <button
             type="button"
             onClick={action.onClick}
-            className="btn btn-outline px-8 py-3 label"
+            className="btn btn-outline label"
           >
             {action.label}
           </button>

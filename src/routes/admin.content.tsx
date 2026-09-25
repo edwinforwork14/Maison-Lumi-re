@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { adminListContent, adminUpsertContent } from '@/features/admin/admin.api'
+import { adminListContent, adminUpsertBanner, adminUpsertHomepageSection } from '@/features/admin/admin.api'
+import { queryKeys } from '@/features/model/queries'
 
 /** Contenido de portada: secciones y banners, editables desde el panel. */
 export const Route = createFileRoute('/admin/content')({
@@ -30,13 +31,19 @@ function AdminContentPage() {
       placement?: 'home' | 'home_hero' | 'shop' | 'checkout'
       position?: number
       status?: 'draft' | 'published' | 'archived'
-    }) => adminUpsertContent({ data: input }),
+    }) => {
+      const { kind, ...rest } = input
+      // Cada tipo de contenido tiene su server function congelada (Plan 02 §4).
+      return kind === 'section'
+        ? adminUpsertHomepageSection({ data: rest })
+        : adminUpsertBanner({ data: rest })
+    },
     onSuccess: (result) => {
       setNotice(result.created ? 'Contenido creado.' : 'Contenido actualizado.')
       setEditing(null)
       void queryClient.invalidateQueries({ queryKey: ['admin', 'content'] })
       // La portada lee esto: su caché queda obsoleta.
-      void queryClient.invalidateQueries({ queryKey: ['content'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.content() })
     },
     onError: (error: Error) => setNotice(error.message),
   })

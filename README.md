@@ -4,11 +4,15 @@ E-commerce premium construido con **TanStack Start + React 19 + TypeScript + Tai
 
 ## Arranque
 
+> **Gestor de paquetes: `pnpm` (único).** El proyecto usa `pnpm-lock.yaml`; `package-lock.json`
+> fue eliminado porque mezclar npm y pnpm en `node_modules` rompe el cliente (resuelve
+> `start-client-core` y `router-core` de árboles distintos y las server functions fallan en el navegador).
+
 ```bash
-npm install
-npm run dev          # desarrollo en http://localhost:3000
-npm run verify       # typecheck + tests + build
-npm run build && npm start   # producción (SSR)
+pnpm install
+pnpm dev          # desarrollo en http://localhost:3000
+pnpm verify       # typecheck + tests + build
+pnpm build && pnpm start   # producción (SSR)
 ```
 
 Cuenta demo: `demo@maisonlumiere.es` / `demo1234`
@@ -30,5 +34,5 @@ Principios: **el servidor decide, el cliente pinta** (precios, stock y totales v
 ## Tests
 
 ```bash
-npm test    # unitarios de dominio con node:test (money, cart, order, catalog, pricing, seeds)
+pnpm test    # unitarios de dominio con node:test (money, cart, order, catalog, pricing, seeds)
 ```

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { adminListCategories, adminUpsertCategory } from '@/features/admin/admin.api'
+import { adminListBrands, adminListCategories, adminListCollections, adminUpsertBrand, adminUpsertCategory, adminUpsertCollection, type AdminTaxonomyRow } from '@/features/admin/admin.api'
 
 /** Categorías: árbol con recuento de productos, creación y edición. */
 export const Route = createFileRoute('/admin/categories')({
@@ -214,6 +214,204 @@ function AdminCategoriesPage() {
           </div>
         </form>
       </section>
+
+      <TaxonomyPanel
+        kind="brand"
+        title="Marcas"
+        listKey={['admin', 'brands']}
+        list={adminListBrands}
+        upsert={adminUpsertBrand}
+      />
+      <TaxonomyPanel
+        kind="collection"
+        title="Colecciones"
+        listKey={['admin', 'collections']}
+        list={adminListCollections}
+        upsert={adminUpsertCollection}
+      />
     </div>
+  )
+}
+
+/**
+ * Marcas y colecciones (Plan 02 §4: `adminUpsertBrand` / `adminUpsertCollection`).
+ * Misma disciplina que categorías: slug único, estado y posición auditados.
+ */
+function TaxonomyPanel({
+  kind,
+  title,
+  listKey,
+  list,
+  upsert,
+}: {
+  kind: 'brand' | 'collection'
+  title: string
+  listKey: readonly unknown[]
+  list: () => Promise<AdminTaxonomyRow[]>
+  upsert: (args: {
+    data: {
+      id?: string
+      slug: string
+      name: string
+      description?: string | null
+      position?: number
+      status?: 'draft' | 'active' | 'archived'
+    }
+  }) => Promise<{ id: string; created: boolean }>
+}) {
+  const queryClient = useQueryClient()
+  const [notice, setNotice] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const rows = useQuery({ queryKey: listKey, queryFn: list })
+
+  const save = useMutation({
+    mutationFn: (input: {
+      id?: string
+      slug: string
+      name: string
+      position?: number
+      status?: 'draft' | 'active' | 'archived'
+    }) => upsert({ data: input }),
+    onSuccess: (result) => {
+      setNotice(result.created ? `${title} creada.` : `${title} actualizada.`)
+      setEditingId(null)
+      void queryClient.invalidateQueries({ queryKey: listKey })
+    },
+    onError: (error: Error) => setNotice(error.message),
+  })
+
+  return (
+    <section className="border-t border-linen pt-6">
+      <h3 className="mb-4 eyebrow">{title}</h3>
+
+      {notice && (
+        <p role="status" className="mb-4 border border-linen bg-sand px-4 py-2 text-xs">
+          {notice}
+        </p>
+      )}
+
+      {rows.isPending ? (
+        <div aria-busy="true" className="space-y-3">
+          <p className="text-sm text-taupe">Cargando…</p>
+          <div className="skeleton h-12 w-full" />
+        </div>
+      ) : rows.isError ? (
+        <div role="alert" className="border border-linen p-6 text-sm text-taupe">
+          No se pudo cargar {title.toLowerCase()}.
+          <button
+            type="button"
+            onClick={() => rows.refetch()}
+            className="btn btn-outline ml-4 px-4 py-1 label"
+          >
+            Reintentar
+          </button>
+        </div>
+      ) : rows.data.length === 0 ? (
+        <p className="border border-linen p-4 text-sm text-taupe">Todavía no hay nada aquí.</p>
+      ) : (
+        <ul className="mb-6 divide-y divide-linen border border-linen">
+          {rows.data.map((row) => (
+            <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+              <div className="min-w-0">
+                <p className="text-sm">{row.name}</p>
+                <p className="text-xs text-taupe">
+                  {row.slug} · {row.status} · {row.productCount} productos
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingId(editingId === row.id ? null : row.id)}
+                aria-expanded={editingId === row.id}
+                className="btn btn-outline px-3 py-1 label"
+              >
+                {editingId === row.id ? 'Cerrar' : 'Editar'}
+              </button>
+              {editingId === row.id && (
+                <form
+                  className="grid w-full gap-2 sm:grid-cols-4"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    const form = new FormData(event.currentTarget)
+                    save.mutate({
+                      id: row.id,
+                      slug: String(form.get('slug') ?? ''),
+                      name: String(form.get('name') ?? ''),
+                      position: Number(form.get('position') ?? row.position),
+                      status: String(form.get('status') ?? row.status) as 'draft',
+                    })
+                  }}
+                >
+                  <label>
+                    <span className="mb-1 block label text-taupe">Nombre</span>
+                    <input name="name" defaultValue={row.name} required className="field" />
+                  </label>
+                  <label>
+                    <span className="mb-1 block label text-taupe">Slug</span>
+                    <input
+                      name="slug"
+                      defaultValue={row.slug}
+                      pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                      required
+                      className="field"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1 block label text-taupe">Estado</span>
+                    <select name="status" defaultValue={row.status} className="field">
+                      <option value="draft">Borrador</option>
+                      <option value="active">Activo</option>
+                      <option value="archived">Archivado</option>
+                    </select>
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      disabled={save.isPending}
+                      className="btn btn-solid px-4 py-2 label disabled:bg-clay"
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                  <input type="hidden" name="position" value={row.position} />
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        className="grid gap-3 sm:grid-cols-4"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const form = new FormData(event.currentTarget)
+          save.mutate({
+            slug: String(form.get('slug') ?? ''),
+            name: String(form.get('name') ?? ''),
+            status: 'draft',
+          })
+          event.currentTarget.reset()
+        }}
+      >
+        <label>
+          <span className="mb-1 block label text-taupe">Nombre</span>
+          <input name="name" required className="field" />
+        </label>
+        <label>
+          <span className="mb-1 block label text-taupe">Slug</span>
+          <input name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required className="field" />
+        </label>
+        <div className="flex items-end">
+          <button
+            type="submit"
+            disabled={save.isPending}
+            className="btn btn-solid px-6 py-3 label disabled:bg-clay"
+          >
+            Crear
+          </button>
+        </div>
+      </form>
+    </section>
   )
 }

@@ -24,8 +24,8 @@ export function CartDrawer() {
     >
       {cartCount === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
-          <p className="font-serif text-2xl font-light">Su carrito está vacío</p>
-          <p className="text-sm text-taupe">
+          <p className="text-[1.0625rem] font-medium">Su carrito está vacío</p>
+          <p className="text-sm text-text-secondary">
             Descubra las piezas de la nueva temporada.
           </p>
           <Link
@@ -44,14 +44,14 @@ export function CartDrawer() {
         </div>
       ) : isError || !quote ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-          <p className="font-serif text-xl font-light">
+          <p className="text-[1.0625rem] font-medium">
             No se pudo calcular su pedido
           </p>
-          <p className="text-sm text-taupe">Vuelva a intentarlo en un momento.</p>
+          <p className="text-sm text-text-secondary">Vuelva a intentarlo en un momento.</p>
         </div>
       ) : (
         <>
-          <ul className="flex-1 divide-y divide-linen overflow-y-auto px-6">
+          <ul className="flex-1 divide-y divide-line overflow-y-auto px-6">
             {quote.lines.map((line) => (
               <li key={line.variantId} className="flex gap-4 py-5">
                 <img
@@ -66,22 +66,22 @@ export function CartDrawer() {
                         to="/products/$slug"
                         params={{ slug: line.slug }}
                         onClick={() => setCartOpen(false)}
-                        className="text-sm hover:text-taupe"
+                        className="text-sm hover:text-text-secondary"
                       >
                         {line.name}
                       </Link>
                       <button
                         type="button"
                         onClick={() => removeFromCart(line.productId, line.color)}
-                        className="text-xs text-taupe hover:text-ink"
+                        className="text-xs text-text-secondary hover:text-strong"
                         aria-label={`Eliminar ${line.name}`}
                       >
                         ✕
                       </button>
                     </div>
-                    <p className="mt-1 text-xs text-taupe">{line.color}</p>
+                    <p className="mt-1 text-xs text-text-secondary">{line.color}</p>
                     {line.availability === 'low' ? (
-                      <p className="mt-1 text-xs text-clay">
+                      <p className="mt-1 text-xs text-text-secondary">
                         Últimas {line.availableStock} unidades
                       </p>
                     ) : null}
@@ -103,20 +103,22 @@ export function CartDrawer() {
             ))}
           </ul>
 
-          <footer className="border-t border-linen px-6 py-5">
+          <footer className="border-t border-line px-6 py-5">
             <div className="mb-1 flex justify-between text-sm">
               <span>Subtotal</span>
               <span className="tabular-nums">{formatMoney(quote.subtotal)}</span>
             </div>
-            <div className="mb-4 flex justify-between text-xs text-taupe">
+            <div className="mb-4 flex justify-between text-xs text-text-secondary">
               <span>Envío estimado</span>
               <span>
                 {isZero(quote.shipping) ? 'Gratuito' : formatMoney(quote.shipping)}
               </span>
             </div>
             {!isZero(quote.freeShippingRemaining) ? (
-              <p className="mb-4 text-xs text-taupe">
-                Envío gratuito a partir de 500 €: le faltan{' '}
+              <p className="mb-4 text-xs text-text-secondary">
+                {/* El umbral lo define `site_settings`; aquí sólo se pinta lo
+                    que el servidor calcula (defecto D37). */}
+                Envío gratuito: le faltan{' '}
                 {formatMoney(quote.freeShippingRemaining)}
               </p>
             ) : null}
@@ -130,7 +132,7 @@ export function CartDrawer() {
             <Link
               to="/cart"
               onClick={() => setCartOpen(false)}
-              className="mt-3 block text-center label text-taupe underline-offset-4 hover:underline"
+              className="mt-3 block text-center label text-text-secondary underline-offset-4 hover:underline"
             >
               Ver carrito
             </Link>

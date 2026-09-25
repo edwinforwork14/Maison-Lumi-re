@@ -3,6 +3,8 @@ node_modules/
 dist/
 .output/
 .tanstack/
+# Gestor único: pnpm (mezclar npm y pnpm rompe el árbol de dependencias)
+package-lock.json
 
 # ─── Cobertura y resultados de pruebas ──────────────────────────────────────
 coverage/

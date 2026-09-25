@@ -40,7 +40,9 @@ export const Route = createRootRoute({
     links: [
       {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Jost:wght@300;400;500&display=swap',
+        // Sustituto métrico de Futura Now (Plan 04 §1.6, opción B): sólo Jost.
+        // La serif (Cormorant Garamond) desaparece: la referencia no usa serif.
+        href: 'https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&display=swap',
       },
     ],
   }),
@@ -79,13 +81,13 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
 function NotFound() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-32 text-center">
-      <p className="mb-3 label-wide tracking-[0.3em] text-taupe">
+      <p className="mb-3 label-wide tracking-[0.3em] text-text-secondary">
         Error 404
       </p>
-      <h1 className="mb-4 font-serif text-4xl font-light">
+      <h1 className="mb-4 editorial-title">
         La página que busca no existe
       </h1>
-      <p className="mb-10 text-sm text-taupe">
+      <p className="mb-10 text-sm text-text-secondary">
         Puede que el enlace haya cambiado o que la pieza ya no esté disponible.
       </p>
       <a

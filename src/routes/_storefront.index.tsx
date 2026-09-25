@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { listProducts, listCategories, listCollections } from '@/features/commerce.api'
+import { listProducts, listCategories, listCollections, getHomepage } from '@/features/commerce.api'
 import { ProductGrid } from '@/components/product/ProductGrid'
 import { SectionHeading } from '@/components/ui/SectionHeading'
-import { ButtonLink } from '@/components/ui/Button'
+import { ButtonAnchor } from '@/components/ui/Button'
 
 export const Route = createFileRoute('/_storefront/')({
   component: Home,
@@ -18,40 +18,87 @@ export const Route = createFileRoute('/_storefront/')({
   }),
   // Datos en servidor (plan.md A2): la home ya no importa mocks.
   loader: async () => {
-    const [all, categories, collections] = await Promise.all([
+    const [all, categories, collections, homepage] = await Promise.all([
       listProducts(),
       listCategories(),
       listCollections(),
+      getHomepage(),
     ])
     const featured = all.filter((p) => p.featured).slice(0, 8)
     const arrivals = [...all].sort((a, b) => Number(b.isNew) - Number(a.isNew)).slice(0, 4)
-    return { featured, arrivals, categories, collections }
+    return { featured, arrivals, categories, collections, homepage }
   },
 })
 
+/**
+ * Portada editable desde BD (Plan 03 S4). Cada bloque tiene sus textos por
+ * defecto: si el panel no ha publicado nada, la home se ve como siempre.
+ */
+const HOME_COPY = {
+  hero: {
+    eyebrow: 'Colección Lumière · Otoño 2026',
+    title: 'La luz de las cosas bien hechas',
+    ctaLabel: 'Descubrir la colección',
+    ctaHref: '/shop',
+  },
+  atelier: {
+    title: 'Cada pieza pasa por ochenta manos antes de la suya',
+    body: 'Trabajamos con talleres familiares de Francia, Italia y España. Acetatos pulidos a mano, cueros de curtido vegetal y metal bañado en oro fino. Producción limitada, sin temporadas descartables.',
+    ctaLabel: 'Conocer Atelier',
+    ctaHref: '/shop?collection=atelier',
+  },
+} as const
+
+type BlockKey = keyof typeof HOME_COPY
+
+function blockOf(
+  blocks: readonly { key: string; title: string | null; subtitle: string | null; ctaLabel: string | null; ctaHref: string | null }[],
+  key: BlockKey,
+) {
+  return blocks.find((block) => block.key === key)
+}
+
 function Home() {
-  const { featured, arrivals, categories, collections } = Route.useLoaderData()
+  const { featured, arrivals, categories, collections, homepage } = Route.useLoaderData()
+
+  const heroBlock = blockOf(homepage.blocks, 'hero')
+  const hero = {
+    eyebrow: heroBlock?.subtitle ?? HOME_COPY.hero.eyebrow,
+    title: heroBlock?.title ?? HOME_COPY.hero.title,
+    ctaLabel: heroBlock?.ctaLabel ?? HOME_COPY.hero.ctaLabel,
+    ctaHref: heroBlock?.ctaHref ?? HOME_COPY.hero.ctaHref,
+  }
+  const atelierBlock = blockOf(homepage.blocks, 'atelier')
+  const atelier = {
+    title: atelierBlock?.title ?? HOME_COPY.atelier.title,
+    body: atelierBlock?.subtitle ?? HOME_COPY.atelier.body,
+    ctaLabel: atelierBlock?.ctaLabel ?? HOME_COPY.atelier.ctaLabel,
+    ctaHref: atelierBlock?.ctaHref ?? HOME_COPY.atelier.ctaHref,
+  }
 
   return (
     <div className="animate-fade-in">
-      {/* ─── Hero ─── */}
-      <section className="relative h-[80vh] min-h-[540px] overflow-hidden bg-linen">
-        <img
-          src="https://picsum.photos/seed/maison-hero/2000/1200"
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-ink/40 via-transparent to-transparent" />
-        <div className="relative flex h-full flex-col items-start justify-end px-6 pb-20 md:px-16 md:pb-28">
-          <p className="mb-4 label-wide tracking-[0.35em] text-ivory/80">
-            Colección Lumière · Otoño 2026
+      {/* ─── Hero: banner a sangre 4/5 → 16/9 con contenido superpuesto (U12) ─── */}
+      <section className="relative overflow-hidden bg-subtle">
+        <picture>
+          <source media="(min-width: 1024px)" srcSet="https://picsum.photos/seed/maison-hero/2000/1125" />
+          <img
+            src="https://picsum.photos/seed/maison-hero/1200/1500"
+            alt=""
+            className="aspect-[4/5] w-full object-cover md:aspect-[4/5] lg:aspect-video"
+          />
+        </picture>
+        <div className="absolute inset-0 bg-gradient-to-t from-strong/50 via-transparent to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 px-6 pb-12 md:px-16 md:pb-16">
+          <p className="mb-3 label-wide tracking-[0.35em] text-surface/80">
+            {hero.eyebrow}
           </p>
-          <h1 className="mb-8 max-w-xl font-serif text-4xl font-light leading-tight text-ivory md:text-6xl">
-            La luz de las cosas bien hechas
+          <h1 className="mb-6 max-w-xl text-[1.4375rem] font-medium uppercase leading-none tracking-[-0.03em] text-surface md:text-[1.9375rem]">
+            {hero.title}
           </h1>
-          <ButtonLink to="/shop" size="lg">
-            Descubrir la colección
-          </ButtonLink>
+          <ButtonAnchor href={hero.ctaHref} size="lg">
+            {hero.ctaLabel}
+          </ButtonAnchor>
         </div>
       </section>
 
@@ -70,7 +117,7 @@ function Home() {
               search={{ category: c.id }}
               className="group block"
             >
-              <div className="mb-4 overflow-hidden bg-sand">
+              <div className="mb-4 overflow-hidden bg-subtle">
                 <img
                   src={`https://picsum.photos/seed/ml-cat-${c.id}/700/900`}
                   alt={c.name}
@@ -97,28 +144,25 @@ function Home() {
       </section>
 
       {/* ─── Editorial ─── */}
-      <section className="bg-charcoal text-ivory">
+      <section className="bg-strong text-surface">
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 md:grid-cols-2 md:px-8 md:py-28">
           <div>
-            <p className="mb-4 label-wide tracking-[0.3em] text-sand">
+            <p className="mb-4 label-wide tracking-[0.3em] text-surface/70">
               El atelier
             </p>
-            <h2 className="mb-6 font-serif text-3xl font-light leading-snug md:text-5xl">
-              Cada pieza pasa por ochenta manos antes de la suya
+            <h2 className="mb-6 editorial-title leading-snug">
+              {atelier.title}
             </h2>
-            <p className="mb-10 max-w-md text-sm leading-relaxed text-ivory/70">
-              Trabajamos con talleres familiares de Francia, Italia y España.
-              Acetatos pulidos a mano, cueros de curtido vegetal y metal bañado
-              en oro fino. Producción limitada, sin temporadas descartables.
+            <p className="body-text mb-10 max-w-md leading-relaxed text-surface/70">
+              {atelier.body}
             </p>
-            <ButtonLink
+            <ButtonAnchor
+              href={atelier.ctaHref}
               variant="outline"
-              to="/shop"
-              search={{ collection: 'atelier' }}
-              className="border-ivory text-ivory hover:bg-ivory hover:text-ink"
+              className="border-surface text-surface hover:bg-surface hover:text-strong"
             >
-              Conocer Atelier
-            </ButtonLink>
+              {atelier.ctaLabel}
+            </ButtonAnchor>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <img
@@ -154,9 +198,9 @@ function Home() {
                 loading="lazy"
                 className="aspect-4/5 w-full object-cover transition-transform duration-700 group-hover:scale-105"
               />
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-ink/25 text-center text-ivory transition-colors group-hover:bg-ink/40">
-                <p className="font-serif text-3xl font-light">{c.name}</p>
-                <p className="mt-2 max-w-52 px-4 text-xs text-ivory/80">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-strong/25 text-center text-surface transition-colors group-hover:bg-strong/40">
+                <p className="editorial-title">{c.name}</p>
+                <p className="mt-2 max-w-52 px-4 text-xs text-surface/80">
                   {c.description}
                 </p>
               </div>

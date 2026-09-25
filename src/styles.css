@@ -1,24 +1,65 @@
 @import "tailwindcss";
 
-/* ─── Tokens de marca (conservados del brief original) ──────────────────── */
+/* ─── Design system — réplica UI/UX Chloé (Plan 04, F1) ────────────────────
+   Valores medidos en docs/ui/chloe-reference.md (§1). La piel pasa de la
+   paleta cálida original a la paleta neutra de la referencia.
+   Los tokens antiguos se conservan como ALIAS de compatibilidad del panel
+   admin (fuera de alcance, Plan 04 §0.3); el storefront ya no los usa —
+   `grep` de clases antiguas fuera de `admin.*` = 0 (criterio F7). */
 @theme {
-  --font-sans: "Jost", "Century Gothic", "Futura", system-ui, sans-serif;
-  --font-serif: "Cormorant Garamond", "Didot", "Playfair Display", serif;
+  /* Tipografía: sin serif (Chloé no usa serif en ninguna parte de la PLP).
+     `Jost` es el sustituto métrico declarado de Futura Now (§1.6, opción B). */
+  --font-sans: "Jost", futura, helvetica, arial, sans-serif;
+  --font-serif: var(--font-sans); /* compat: sólo la usa el panel admin (4 rutas) */
 
-  /* Textos secundarios oscurecidos para contraste AA sobre ivory/sand
-     (auditoría axe: color-contrast). Mantienen el tono cálido de marca. */
-  --color-ivory: #faf8f4;
-  --color-sand: #f1ece3;
-  --color-linen: #e7e0d3;
-  --color-clay: #7d6c58;
-  --color-taupe: #6e6151;
-  --color-charcoal: #2b2724;
-  --color-ink: #1a1815;
-  --color-gold: #7d6a4b;
+  /* ─── Superficies y texto (§1.2) ──────────────────────────────────────── */
+  --color-surface: #ffffff;
+  --color-surface-off: #f9f9f9;
+  --color-subtle: #f8f7f5; /* fondo de tarjeta, acordeón y modal */
+  --color-subtle-hover: #ede9e3;
+  --color-text-primary: #0a0a0a;
+  --color-text-secondary: #717171;
+  --color-line: #e5e5e5; /* borde decorativo por defecto */
+  --color-line-light: #cecece;
+  --color-line-medium: #a8a8a8;
+  --color-strong: #0a0a0a;
+  --color-black: #000000;
+  --color-gold: #8f7144;
+  --color-danger: #bb3322;
+
+  /* ─── Frost / overlays (§1.3) ─────────────────────────────────────────── */
+  --color-frost: rgb(255 255 255 / 0.95);
+  --color-frost-transparent: rgb(255 255 255 / 0.7);
+  --color-frost-inverse: rgb(0 0 0 / 0.95);
+  --color-overlay: rgb(0 0 0 / 0.2);
+  --color-border-frost: rgb(255 255 255 / 0.2);
+  --shadow-frost: 0 0 1px 0 rgb(0 0 0 / 0.15), 0 1px 4px 0 rgb(0 0 0 / 0.05);
+  --blur-frost: 10px;
+
+  /* ─── Espaciado semántico (§1.4): el detalle fino vive en @utility ─────── */
+  --spacing-block: 4rem; /* 96 px; en móvil se usa el valor móvil vía utility */
+  --spacing-tight-block: 3rem; /* 64 px */
+
+  /* ─── Motion (§1.3) ───────────────────────────────────────────────────── */
+  --ease-chloe: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* ─── Alias de la piel anterior (COMATIBILIDAD, no transición) ──────────
+     El panel admin (fuera del alcance visual del Plan 04, §0.3) sigue
+     usando estas clases en 15 rutas; eliminarlas dejaría el panel sin color.
+     El storefront ya no las usa: `grep` fuera de `admin.*` = 0 (F7). */
+  --color-ivory: var(--color-surface);
+  --color-sand: var(--color-subtle);
+  --color-linen: var(--color-line);
+  --color-clay: var(--color-text-secondary);
+  --color-taupe: var(--color-text-secondary);
+  --color-charcoal: var(--color-text-primary);
+  --color-ink: var(--color-strong);
 
   --animate-fade-in: fade-in 0.6s ease both;
   --animate-fade-up: fade-up 0.7s ease both;
-  --animate-slide-in: slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-slide-in: slide-in 0.35s var(--ease-chloe) both;
+  /* Entrada lateral de la columna 2 del mega dropdown (brief §3). */
+  --animate-mega-in: mega-in 0.22s var(--ease-chloe) both;
 
   @keyframes fade-in {
     from { opacity: 0; }
@@ -32,14 +73,31 @@
     from { transform: translateX(100%); }
     to { transform: translateX(0); }
   }
+  @keyframes mega-in {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
 }
 
 /* Variante de navegación: abre el panel por hover Y foco (corrige D1). */
 @custom-variant group-nav (&:is(:where(.group-nav):is(:hover, :focus-within) *));
 
-/* ─── Utilidades de marca (corrige D10: fin de las cadenas repetidas) ─────
-   `label*` aportan tamaño, mayúsculas y tracking (sin color, para poder
-   combinarlas); `eyebrow` añade el color secundario de marca. */
+/* ─── Utilidades de texto (§1.1) ──────────────────────────────────────────
+   Regla práctica de la referencia: el cuerpo es 13 px y el título editorial
+   23/31 px con tracking negativo. Nada de 14/16/18 px en la capa de presentación. */
+@utility body-text {
+  @apply text-[13px] leading-[1.3846] tracking-[0.031rem];
+}
+
+@utility body-strong {
+  @apply text-[13px] leading-[1.3846] tracking-[0.031rem] font-medium;
+}
+
+@utility editorial-title {
+  @apply text-[1.4375rem] md:text-[1.9375rem] leading-none font-medium uppercase tracking-[-0.03em];
+}
+
+/* ─── Utilidades de etiqueta (corrige D10; se conservan de la piel anterior) ─ */
 @utility label {
   @apply text-[11px] uppercase tracking-[0.2em];
 }
@@ -65,50 +123,65 @@
 }
 
 @utility eyebrow {
-  @apply text-[11px] uppercase tracking-[0.25em] text-taupe;
+  @apply text-[11px] uppercase tracking-[0.25em] text-text-secondary;
 }
 
+/* ─── Botones (§1.5): una sola matriz, 48 px de alto, radio 4 px ─────────── */
 @utility btn {
-  @apply inline-flex items-center justify-center uppercase tracking-[0.2em] transition-colors duration-300;
+  @apply inline-flex items-center justify-center gap-3 rounded-[4px] px-5 py-3 min-h-12 text-[13px] leading-[1.3846] uppercase tracking-[0.2em] transition-colors duration-300;
 }
 
 @utility btn-outline {
-  @apply border border-ink text-ink hover:bg-ink hover:text-ivory;
+  @apply border border-strong text-strong bg-surface hover:bg-strong hover:text-surface disabled:border-line-light disabled:text-text-secondary disabled:cursor-not-allowed;
 }
 
 @utility btn-solid {
-  @apply bg-ink py-4 text-center text-ivory transition-colors hover:bg-charcoal;
+  @apply bg-frost-inverse text-white shadow-frost hover:bg-black;
+}
+
+@utility btn-frost {
+  @apply bg-frost border border-border-frost shadow-frost backdrop-blur-[10px] text-text-primary hover:bg-frost-transparent;
 }
 
 @utility btn-block {
-  @apply w-full py-4 text-center;
+  @apply w-full;
 }
 
+/* ─── Formularios (§3.4) ──────────────────────────────────────────────────── */
 @utility field {
-  @apply w-full border border-linen bg-transparent px-4 py-3 text-sm outline-none placeholder:text-clay focus:border-ink;
+  @apply w-full border border-line bg-surface px-4 py-3 text-[13px] outline-none placeholder:text-text-secondary focus:border-strong;
+}
+
+@utility field-flush {
+  @apply w-full min-h-12 border-b border-strong bg-transparent py-3 text-[13px] outline-none placeholder:text-text-secondary;
+}
+
+/* ─── Superficies de modal (§1.5) ─────────────────────────────────────────── */
+@utility modal-surface {
+  @apply bg-frost backdrop-blur-[10px] shadow-frost rounded-[4px] overflow-hidden;
 }
 
 @utility skeleton {
-  @apply animate-pulse bg-linen;
+  @apply animate-pulse bg-subtle;
 }
 
-/* ─── Base ───────────────────────────────────────────────────────────────── */
+/* ─── Base (conservada: accesibilidad ya resuelta) ───────────────────────── */
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  @apply bg-ivory text-charcoal font-sans antialiased;
+  @apply bg-surface text-text-primary font-sans antialiased;
 }
 
 ::selection {
-  background: var(--color-clay);
+  background: var(--color-strong);
   color: white;
 }
 
 /* Accesibilidad: foco siempre visible en navegación por teclado. */
 :focus-visible {
-  outline: 2px solid var(--color-ink);
+  outline: 2px solid var(--color-strong);
   outline-offset: 2px;
 }
 
@@ -126,7 +199,7 @@ body {
 
 /* Skip-link: visible solo al recibir foco por teclado. */
 .skip-link {
-  @apply absolute left-4 top-4 z-[100] -translate-y-24 bg-ink px-6 py-3 text-[11px] uppercase tracking-[0.25em] text-ivory transition-transform;
+  @apply absolute left-4 top-4 z-[100] -translate-y-24 bg-strong px-6 py-3 text-[11px] uppercase tracking-[0.25em] text-surface transition-transform;
 }
 .skip-link:focus {
   transform: translateY(0);

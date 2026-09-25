@@ -22,7 +22,7 @@ function CartPage() {
 
   return (
     <div className="mx-auto max-w-7xl animate-fade-in px-4 py-14 md:px-8 md:py-20">
-      <h1 className="mb-10 font-serif text-4xl font-light">Carrito</h1>
+      <h1 className="mb-10 editorial-title">Carrito</h1>
 
       {cartCount === 0 ? (
         <EmptyState
@@ -45,7 +45,7 @@ function CartPage() {
       ) : (
         <div className="grid gap-12 lg:grid-cols-[1fr_360px]">
           <div>
-            <ul className="divide-y divide-linen border-y border-linen">
+            <ul className="divide-y divide-line border-y border-line">
               {quote.lines.map((line) => (
                 <li key={line.variantId} className="flex gap-6 py-8">
                   <Link
@@ -65,13 +65,13 @@ function CartPage() {
                         <Link
                           to="/products/$slug"
                           params={{ slug: line.slug }}
-                          className="text-sm hover:text-taupe"
+                          className="text-sm hover:text-text-secondary"
                         >
                           {line.name}
                         </Link>
-                        <p className="mt-1 text-xs text-taupe">Color: {line.color}</p>
+                        <p className="mt-1 text-xs text-text-secondary">Color: {line.color}</p>
                         {line.availability === 'low' ? (
-                          <p className="mt-1 text-xs text-clay">
+                          <p className="mt-1 text-xs text-text-secondary">
                             Últimas {line.availableStock} unidades
                           </p>
                         ) : null}
@@ -89,7 +89,7 @@ function CartPage() {
                       <button
                         type="button"
                         onClick={() => removeFromCart(line.productId, line.color)}
-                        className="label text-taupe underline-offset-4 hover:text-ink hover:underline"
+                        className="label text-text-secondary underline-offset-4 hover:text-strong hover:underline"
                       >
                         Eliminar
                       </button>

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StorefrontRouteImport } from './routes/_storefront'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as StorefrontIndexRouteImport } from './routes/_storefront.index'
 import { Route as StorefrontAccountRouteImport } from './routes/_storefront.account'
 import { Route as StorefrontCartRouteImport } from './routes/_storefront.cart'
@@ -23,11 +24,15 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as AdminCategoriesRouteImport } from './routes/admin.categories'
 import { Route as AdminContentRouteImport } from './routes/admin.content'
+import { Route as AdminCouponsRouteImport } from './routes/admin.coupons'
 import { Route as AdminCustomersRouteImport } from './routes/admin.customers'
 import { Route as AdminInventoryRouteImport } from './routes/admin.inventory'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as AdminReviewsRouteImport } from './routes/admin.reviews'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as ApiHealthRouteImport } from './routes/api.health'
+import { Route as ApiSitemapDotxmlRouteImport } from './routes/api.sitemap[.]xml'
 import { Route as StorefrontProductsSlugRouteImport } from './routes/_storefront.products.$slug'
 import { Route as AdminOrdersIndexRouteImport } from './routes/admin.orders.index'
 import { Route as AdminOrdersIdRouteImport } from './routes/admin.orders.$id'
@@ -41,6 +46,11 @@ const StorefrontRoute = StorefrontRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StorefrontIndexRoute = StorefrontIndexRouteImport.update({
@@ -103,6 +113,11 @@ const AdminContentRoute = AdminContentRouteImport.update({
   path: '/content',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminCouponsRoute = AdminCouponsRouteImport.update({
+  id: '/coupons',
+  path: '/coupons',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminCustomersRoute = AdminCustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
@@ -118,6 +133,11 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminReviewsRoute = AdminReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -127,6 +147,16 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
   getParentRoute: () => AdminRoute,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSitemapDotxmlRoute = ApiSitemapDotxmlRouteImport.update({
+  id: '/api/sitemap.xml',
+  path: '/api/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const StorefrontProductsSlugRoute = StorefrontProductsSlugRouteImport.update({
   id: '/products/$slug',
@@ -157,6 +187,7 @@ const AdminProductsIdRoute = AdminProductsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof StorefrontIndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/robots.txt': typeof RobotsDottxtRoute
   '/account': typeof StorefrontAccountRoute
   '/cart': typeof StorefrontCartRoute
   '/checkout': typeof StorefrontCheckoutRoute
@@ -167,11 +198,15 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/categories': typeof AdminCategoriesRoute
   '/admin/content': typeof AdminContentRoute
+  '/admin/coupons': typeof AdminCouponsRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/inventory': typeof AdminInventoryRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/sitemap.xml': typeof ApiSitemapDotxmlRoute
   '/admin/': typeof AdminIndexRoute
   '/products/$slug': typeof StorefrontProductsSlugRoute
   '/admin/orders/$id': typeof AdminOrdersIdRoute
@@ -180,6 +215,7 @@ export interface FileRoutesByFullPath {
   '/admin/products/': typeof AdminProductsIndexRoute
 }
 export interface FileRoutesByTo {
+  '/robots.txt': typeof RobotsDottxtRoute
   '/account': typeof StorefrontAccountRoute
   '/cart': typeof StorefrontCartRoute
   '/checkout': typeof StorefrontCheckoutRoute
@@ -190,11 +226,15 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/categories': typeof AdminCategoriesRoute
   '/admin/content': typeof AdminContentRoute
+  '/admin/coupons': typeof AdminCouponsRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/inventory': typeof AdminInventoryRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/sitemap.xml': typeof ApiSitemapDotxmlRoute
   '/': typeof StorefrontIndexRoute
   '/admin': typeof AdminIndexRoute
   '/products/$slug': typeof StorefrontProductsSlugRoute
@@ -207,6 +247,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_storefront': typeof StorefrontRouteWithChildren
   '/admin': typeof AdminRouteWithChildren
+  '/robots.txt': typeof RobotsDottxtRoute
   '/_storefront/account': typeof StorefrontAccountRoute
   '/_storefront/cart': typeof StorefrontCartRoute
   '/_storefront/checkout': typeof StorefrontCheckoutRoute
@@ -217,11 +258,15 @@ export interface FileRoutesById {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/categories': typeof AdminCategoriesRoute
   '/admin/content': typeof AdminContentRoute
+  '/admin/coupons': typeof AdminCouponsRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/inventory': typeof AdminInventoryRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/sitemap.xml': typeof ApiSitemapDotxmlRoute
   '/_storefront/': typeof StorefrontIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/_storefront/products/$slug': typeof StorefrontProductsSlugRoute
@@ -235,6 +280,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/robots.txt'
     | '/account'
     | '/cart'
     | '/checkout'
@@ -245,11 +291,15 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/categories'
     | '/admin/content'
+    | '/admin/coupons'
     | '/admin/customers'
     | '/admin/inventory'
     | '/admin/login'
+    | '/admin/reviews'
     | '/admin/settings'
     | '/admin/users'
+    | '/api/health'
+    | '/api/sitemap.xml'
     | '/admin/'
     | '/products/$slug'
     | '/admin/orders/$id'
@@ -258,6 +308,7 @@ export interface FileRouteTypes {
     | '/admin/products/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/robots.txt'
     | '/account'
     | '/cart'
     | '/checkout'
@@ -268,11 +319,15 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/categories'
     | '/admin/content'
+    | '/admin/coupons'
     | '/admin/customers'
     | '/admin/inventory'
     | '/admin/login'
+    | '/admin/reviews'
     | '/admin/settings'
     | '/admin/users'
+    | '/api/health'
+    | '/api/sitemap.xml'
     | '/'
     | '/admin'
     | '/products/$slug'
@@ -284,6 +339,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_storefront'
     | '/admin'
+    | '/robots.txt'
     | '/_storefront/account'
     | '/_storefront/cart'
     | '/_storefront/checkout'
@@ -294,11 +350,15 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/categories'
     | '/admin/content'
+    | '/admin/coupons'
     | '/admin/customers'
     | '/admin/inventory'
     | '/admin/login'
+    | '/admin/reviews'
     | '/admin/settings'
     | '/admin/users'
+    | '/api/health'
+    | '/api/sitemap.xml'
     | '/_storefront/'
     | '/admin/'
     | '/_storefront/products/$slug'
@@ -311,6 +371,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   StorefrontRoute: typeof StorefrontRouteWithChildren
   AdminRoute: typeof AdminRouteWithChildren
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  ApiHealthRoute: typeof ApiHealthRoute
+  ApiSitemapDotxmlRoute: typeof ApiSitemapDotxmlRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -327,6 +390,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_storefront/': {
@@ -413,6 +483,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminContentRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/coupons': {
+      id: '/admin/coupons'
+      path: '/coupons'
+      fullPath: '/admin/coupons'
+      preLoaderRoute: typeof AdminCouponsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/customers': {
       id: '/admin/customers'
       path: '/customers'
@@ -434,6 +511,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLoginRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/reviews': {
+      id: '/admin/reviews'
+      path: '/reviews'
+      fullPath: '/admin/reviews'
+      preLoaderRoute: typeof AdminReviewsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings': {
       id: '/admin/settings'
       path: '/settings'
@@ -447,6 +531,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/users'
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sitemap.xml': {
+      id: '/api/sitemap.xml'
+      path: '/api/sitemap.xml'
+      fullPath: '/api/sitemap.xml'
+      preLoaderRoute: typeof ApiSitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_storefront/products/$slug': {
       id: '/_storefront/products/$slug'
@@ -518,9 +616,11 @@ interface AdminRouteChildren {
   AdminAuditRoute: typeof AdminAuditRoute
   AdminCategoriesRoute: typeof AdminCategoriesRoute
   AdminContentRoute: typeof AdminContentRoute
+  AdminCouponsRoute: typeof AdminCouponsRoute
   AdminCustomersRoute: typeof AdminCustomersRoute
   AdminInventoryRoute: typeof AdminInventoryRoute
   AdminLoginRoute: typeof AdminLoginRoute
+  AdminReviewsRoute: typeof AdminReviewsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -534,9 +634,11 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
   AdminCategoriesRoute: AdminCategoriesRoute,
   AdminContentRoute: AdminContentRoute,
+  AdminCouponsRoute: AdminCouponsRoute,
   AdminCustomersRoute: AdminCustomersRoute,
   AdminInventoryRoute: AdminInventoryRoute,
   AdminLoginRoute: AdminLoginRoute,
+  AdminReviewsRoute: AdminReviewsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -551,6 +653,9 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   StorefrontRoute: StorefrontRouteWithChildren,
   AdminRoute: AdminRouteWithChildren,
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  ApiHealthRoute: ApiHealthRoute,
+  ApiSitemapDotxmlRoute: ApiSitemapDotxmlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

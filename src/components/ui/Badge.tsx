@@ -1,8 +1,10 @@
 const styles: Record<string, string> = {
-  new: 'bg-ink text-ivory',
-  bestseller: 'bg-clay text-white',
-  sale: 'bg-gold text-white',
-  out: 'bg-sand text-taupe border border-linen',
+  // Etiquetas de tarjeta de la referencia: mínimas, 10 px, mayúsculas,
+  // sin fondos de color saturado (Plan 04 §2.7).
+  new: 'border border-strong text-text-primary bg-surface',
+  bestseller: 'border border-line-medium text-text-secondary bg-surface',
+  sale: 'border border-strong text-strong bg-surface',
+  out: 'border border-line text-text-secondary bg-subtle',
 }
 
 export function Badge({
@@ -14,7 +16,7 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-block px-3 py-1 label-xs ${styles[kind]}`}
+      className={`inline-block px-2 py-1 text-[10px] uppercase tracking-[0.2em] ${styles[kind]}`}
     >
       {children}
     </span>

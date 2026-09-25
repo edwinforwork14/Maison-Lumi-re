@@ -8,7 +8,8 @@ interface QuantitySelectorProps {
 
 /**
  * Stepper de cantidad accesible: los botones se desactivan en los límites
- * y el valor se anuncia a lectores de pantalla.
+ * y el valor se anuncia a lectores de pantalla. Medida de la referencia:
+ * 48 px de alto, borde de línea, texto a 13 px (Plan 04 §3.4).
  */
 export function QuantitySelector({
   value,
@@ -17,18 +18,18 @@ export function QuantitySelector({
   max = 10,
 }: QuantitySelectorProps) {
   return (
-    <div className="inline-flex items-center border border-linen">
+    <div className="inline-flex h-12 items-center border border-line bg-surface">
       <button
         type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
         disabled={value <= min}
-        className="px-4 py-2 text-taupe transition-colors hover:text-ink disabled:cursor-not-allowed disabled:text-linen"
+        className="w-12 self-stretch text-text-secondary transition-colors hover:text-strong disabled:cursor-not-allowed disabled:text-line-light"
         aria-label="Disminuir cantidad"
       >
         −
       </button>
       <span
-        className="min-w-8 text-center text-sm tabular-nums"
+        className="min-w-8 text-center text-[13px] tabular-nums"
         role="status"
         aria-label={`Cantidad: ${value}`}
       >
@@ -38,7 +39,7 @@ export function QuantitySelector({
         type="button"
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={value >= max}
-        className="px-4 py-2 text-taupe transition-colors hover:text-ink disabled:cursor-not-allowed disabled:text-linen"
+        className="w-12 self-stretch text-text-secondary transition-colors hover:text-strong disabled:cursor-not-allowed disabled:text-line-light"
         aria-label="Aumentar cantidad"
       >
         +

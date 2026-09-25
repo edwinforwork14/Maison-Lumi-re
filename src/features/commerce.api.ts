@@ -11,12 +11,13 @@ import { getCookie, getRequest, setCookie } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { catalogRepository } from '@/server/seed/catalog'
 import type { CartQuote } from '@/server/services/cart-quote'
+import type { HomepageContent } from '@/server/services/storefront-content'
 import type { SessionUser } from '@/server/services/storefront-auth'
 import { AppError } from '@/server/errors'
 import { isPostgresDataSource } from '@/server/runtime/env'
 import type { CatalogFilters, SortId } from '@/domain/catalog'
 import type { Money } from '@/domain/money'
-import type { Product } from '@/data/types'
+import type { Product } from '@/domain/catalog/types'
 
 // ─── Esquemas de entrada (Zod en toda frontera) ─────────────────────────────
 
@@ -47,6 +48,8 @@ const quoteInputSchema = z.object({
     )
     .max(50),
   shippingMethod: z.enum(['standard', 'express']).optional(),
+  /** Código de descuento: se valida y aplica en el servidor (Plan 03 §3). */
+  couponCode: z.string().trim().max(40).optional(),
 })
 
 const placeOrderSchema = quoteInputSchema.extend({
@@ -162,7 +165,13 @@ export const quoteCart = createServerFn({ method: 'POST' })
   .validator(quoteInputSchema)
   .handler(async ({ data }): Promise<CartQuote> => {
     const { quoteCartFromDb } = await import('@/server/services/storefront-orders')
-    return quoteCartFromDb(data)
+    // La identidad sólo sirve para previsualizar el límite «usos por cliente»;
+    // el límite real se comprueba en la transacción del pedido.
+    const user = await currentStorefrontUser()
+    return quoteCartFromDb({
+      ...data,
+      ...(user ? { email: user.email } : {}),
+    })
   })
 
 export const placeOrder = createServerFn({ method: 'POST' })
@@ -180,6 +189,7 @@ export const placeOrder = createServerFn({ method: 'POST' })
       email: customer.email,
       lines: data.lines,
       shippingMethod: data.shippingMethod,
+      couponCode: data.couponCode,
       customer,
       idempotencyKey: data.idempotencyKey,
     })
@@ -265,7 +275,7 @@ async function issueStorefrontSession(userId: string): Promise<void> {
  * (cookie firmada). No hay camino en memoria: el almacén que guardaba las
  * contraseñas en base64 se eliminó para que no pueda usarse por accidente.
  */
-async function currentStorefrontUser(): Promise<SessionUser | null> {
+async function currentSession(): Promise<SessionContext | null> {
   const { createPostgresSessionsRepository, resolveSessionSecret } = await import(
     '@/server/db/repositories/sessions.postgres'
   )
@@ -276,7 +286,29 @@ async function currentStorefrontUser(): Promise<SessionUser | null> {
   const { createPostgresStorefrontAuth } = await import('@/server/services/storefront-auth')
   const account = await createPostgresStorefrontAuth().currentUser(session.userId)
   if (!account) return null
-  return { firstName: account.firstName, lastName: account.lastName, email: account.email }
+  return {
+    userId: session.userId,
+    firstName: account.firstName,
+    lastName: account.lastName,
+    email: account.email,
+  }
+}
+
+/** Sesión obligatoria: lanza `UNAUTHENTICATED` en lugar de devolver null. */
+async function requireSession(): Promise<SessionContext> {
+  const session = await currentSession()
+  if (!session) throw new AppError('UNAUTHENTICATED', 'Sesión requerida')
+  return session
+}
+
+async function currentStorefrontUser(): Promise<SessionUser | null> {
+  const session = await currentSession()
+  if (!session) return null
+  return {
+    firstName: session.firstName,
+    lastName: session.lastName,
+    email: session.email,
+  }
 }
 
 export const getSession = createServerFn({ method: 'GET' }).handler(
@@ -323,6 +355,58 @@ export const logoutFn = createServerFn({ method: 'POST' }).handler(async () => {
 })
 
 
+// ─── Wishlist y reseñas (Plan 03, S3) ─────────────────────────────────────
+
+/** Contexto de sesión con el id: lo necesitan wishlist y reseñas. */
+type SessionContext = SessionUser & { readonly userId: string }
+
+/** Wishlist del titular. Sólo con sesión: no hay lista anónima en el servidor. */
+export const listWishlist = createServerFn({ method: 'GET' }).handler(async () => {
+  const session = await requireSession()
+  const { listWishlistProductIds } = await import('@/server/services/storefront-social')
+  return listWishlistProductIds(session.userId)
+})
+
+export const toggleWishlist = createServerFn({ method: 'POST' })
+  .validator(z.object({ productId: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const session = await requireSession()
+    const { toggleWishlistProduct } = await import('@/server/services/storefront-social')
+    return toggleWishlistProduct(session.userId, data.productId)
+  })
+
+/** Reseñas públicas de un producto: sólo las aprobadas, sin datos personales. */
+export const listProductReviews = createServerFn({ method: 'GET' })
+  .validator(z.object({ productId: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const { listProductReviews: fetchReviews } = await import('@/server/services/storefront-social')
+    return fetchReviews(data.productId)
+  })
+
+/**
+ * Crear una reseña. Exige sesión y una línea de pedido **propia** entregada:
+ * la compra es la que autoriza a opinar (Plan 03 §3).
+ */
+export const createReview = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      productId: z.string().min(1),
+      orderItemId: z.string().uuid(),
+      rating: z.number().int().min(1).max(5),
+      title: z.string().trim().max(120).nullable().optional(),
+      body: z.string().trim().max(2_000).nullable().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const session = await requireSession()
+    const { createProductReview } = await import('@/server/services/storefront-social')
+    return createProductReview({
+      ...data,
+      userId: session.userId,
+      email: session.email,
+    })
+  })
+
 // re-export del tipo SortId para consumers de la API
 export type { SortId }
 
@@ -352,5 +436,21 @@ export const getSiteSettings = createServerFn({ method: 'GET' }).handler(
   async (): Promise<SiteSettings> => {
     const { readPublicSettings } = await import('@/server/services/storefront-orders')
     return readPublicSettings()
+  },
+)
+
+// ─── Contenido de la portada (Plan 03 §6) ─────────────────────────────────────
+
+export type { HomepageBlock, HomepageContent } from '@/server/services/storefront-content'
+
+/**
+ * Portada desde BD: secciones y banners publicados y vigentes del panel
+ * («Contenido»). Sin BD configurada devuelve el contenido por defecto, así
+ * que la home nunca se queda sin textos.
+ */
+export const getHomepage = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<HomepageContent> => {
+    const { getHomepageContent } = await import('@/server/services/storefront-content')
+    return getHomepageContent()
   },
 )

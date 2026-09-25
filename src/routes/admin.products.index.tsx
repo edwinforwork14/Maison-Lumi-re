@@ -2,13 +2,16 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
+  adminArchiveProduct,
   adminCreateProduct,
   adminListProducts,
+  adminPublishProduct,
   adminSetProductStatus,
   type AdminProductListItem,
 } from '@/features/admin/admin.api'
 import { listCategories } from '@/features/commerce.api'
 import { formatCents } from '@/lib/money-format'
+import { queryKeys } from '@/features/model/queries'
 
 /** Catálogo: listar con filtros y cursor, crear y publicar/archivar. */
 export const Route = createFileRoute('/admin/products/')({
@@ -42,11 +45,21 @@ function AdminProductsPage() {
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin', 'products'] })
     void queryClient.invalidateQueries({ queryKey: ['admin', 'kpis'] })
+    // El catálogo público de la tienda debe reflejar el cambio (Plan 02 §4).
+    void queryClient.invalidateQueries({ queryKey: queryKeys.products() })
   }
 
   const setStatusMutation = useMutation({
-    mutationFn: (input: { id: string; status: 'draft' | 'active' | 'archived' }) =>
-      adminSetProductStatus({ data: input }),
+    mutationFn: (input: {
+      id: string
+      status: 'draft' | 'active' | 'archived'
+      version?: string
+    }) => {
+      // Nombres congelados del Plan 02 §4 (los consume la invalidación del 03).
+      if (input.status === 'active') return adminPublishProduct({ data: { id: input.id, version: input.version } })
+      if (input.status === 'archived') return adminArchiveProduct({ data: { id: input.id, version: input.version } })
+      return adminSetProductStatus({ data: { id: input.id, status: input.status, version: input.version } })
+    },
     onSuccess: (result) => {
       setNotice(`Producto ${result.status === 'active' ? 'publicado' : 'actualizado'}.`)
       invalidate()
@@ -147,8 +160,20 @@ function AdminProductsPage() {
                     key={product.id}
                     product={product}
                     busy={setStatusMutation.isPending}
-                    onPublish={() => setStatusMutation.mutate({ id: product.id, status: 'active' })}
-                    onArchive={() => setStatusMutation.mutate({ id: product.id, status: 'archived' })}
+                    onPublish={() =>
+                      setStatusMutation.mutate({
+                        id: product.id,
+                        status: 'active',
+                        version: new Date(product.updatedAt).toISOString(),
+                      })
+                    }
+                    onArchive={() =>
+                      setStatusMutation.mutate({
+                        id: product.id,
+                        status: 'archived',
+                        version: new Date(product.updatedAt).toISOString(),
+                      })
+                    }
                   />
                 ))}
               </tbody>

@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { useDialog } from './Modal'
 
 interface DrawerProps {
   open: boolean
@@ -11,49 +12,11 @@ interface DrawerProps {
  * Drawer accesible (plan.md D9): role="dialog" + aria-modal, cierre con
  * Escape, foco atrapado mientras está abierto y restauración del foco al
  * elemento disparador al cerrar. El bloqueo de scroll se mantiene.
+ * La lógica de comportamiento vive en `useDialog` (Plan 04 §3.1), compartida
+ * con `Modal`.
  */
 export function Drawer({ open, onClose, title, children }: DrawerProps) {
-  const panelRef = useRef<HTMLElement | null>(null)
-  const triggerRef = useRef<Element | null>(null)
-
-  useEffect(() => {
-    if (!open) return
-    triggerRef.current = document.activeElement
-
-    const panel = panelRef.current
-    const focusables = panel?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    )
-    focusables?.[0]?.focus()
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-        return
-      }
-      if (e.key === 'Tab' && focusables && focusables.length > 0) {
-        const first = focusables[0]
-        const last = focusables[focusables.length - 1]
-        const active = document.activeElement
-        if (e.shiftKey && active === first) {
-          e.preventDefault()
-          last.focus()
-        } else if (!e.shiftKey && active === last) {
-          e.preventDefault()
-          first.focus()
-        }
-      }
-    }
-
-    window.addEventListener('keydown', onKey)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = ''
-      const trigger = triggerRef.current
-      if (trigger instanceof HTMLElement) trigger.focus()
-    }
-  }, [open, onClose])
+  const { panelRef } = useDialog<HTMLElement>(open, onClose)
 
   return (
     <div
@@ -63,7 +26,7 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
       {/* Overlay */}
       <div
         onClick={onClose}
-        className={`absolute inset-0 bg-ink/30 transition-opacity duration-500 ${
+        className={`absolute inset-0 bg-strong/30 transition-opacity duration-500 ${
           open ? 'opacity-100' : 'opacity-0'
         }`}
       />
@@ -74,16 +37,16 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
         aria-modal={open}
         aria-label={title}
         inert={!open}
-        className={`absolute right-0 top-0 h-full w-full max-w-md bg-ivory shadow-2xl transition-transform duration-500 ease-out ${
+        className={`absolute right-0 top-0 h-full w-full max-w-md bg-surface shadow-2xl transition-transform duration-500 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        <header className="flex items-center justify-between border-b border-linen px-6 py-5">
+        <header className="flex items-center justify-between border-b border-line px-6 py-5">
           <h2 className="label-sm-wide">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-xl leading-none text-taupe transition-colors hover:text-ink"
+            className="text-xl leading-none text-text-secondary transition-colors hover:text-strong"
             aria-label="Cerrar"
           >
             ✕

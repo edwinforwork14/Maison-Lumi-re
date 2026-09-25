@@ -22,21 +22,46 @@ import {
   dashboardKpis,
   deleteAdminVariant,
   getAdminProduct,
+  listAdminBrands,
   listAdminCategories,
+  listAdminCollections,
   listAdminInventory,
   listAdminProducts,
   listAuditEntries,
+  reorderAdminCatalog,
   setAdminProductStatus,
   updateAdminProduct,
+  upsertAdminBrand,
   upsertAdminCategory,
+  upsertAdminCollection,
   upsertAdminVariant,
   type AdminCategoryRow,
   type AdminInventoryRow,
+  type AdminMediaItem,
   type AdminProductDetail,
   type AdminProductListItem,
+  type AdminTaxonomyRow,
   type AuditListItem,
   type DashboardKpis,
 } from '@/server/services/admin/catalog-admin'
+import {
+  listAdminCoupons,
+  listAdminReviews,
+  moderateAdminReview,
+  setAdminCouponStatus,
+  upsertAdminCoupon,
+  type AdminCouponRow,
+  type AdminReviewRow,
+  type CouponStatus,
+  type ReviewStatus,
+} from '@/server/services/admin/promotions-admin'
+import {
+  attachAdminMedia,
+  createAdminUploadUrl,
+  listAdminMedia,
+  reorderAdminMedia,
+  type UploadTicket,
+} from '@/server/services/admin/media-admin'
 import {
   assignAdminRole,
   listAdminContent,
@@ -229,6 +254,8 @@ export const adminCreateProduct = createServerFn({ method: 'POST' })
 
 const productPatchSchema = z.object({
   id: z.string().uuid(),
+  /** Versión leída por el cliente (`updated_at` ISO): edición optimista. */
+  version: z.string().datetime().optional(),
   name: z.string().trim().min(2).max(120).optional(),
   shortDescription: z.string().trim().max(300).nullable().optional(),
   description: z.string().trim().max(4_000).nullable().optional(),
@@ -249,10 +276,35 @@ export const adminSetProductStatus = createServerFn({ method: 'POST' })
     z.object({
       id: z.string().uuid(),
       status: z.enum(['draft', 'active', 'archived']),
+      version: z.string().datetime().optional(),
     }),
   )
   .handler(async ({ data }): Promise<{ status: string }> => {
     const result = await setAdminProductStatus(await currentActor(), data)
+    return { status: result.status }
+  })
+
+/**
+ * Publicación (nombres congelados en el Plan 02 §4; los consume el Plan 03
+ * para su invalidación de caché). Publicar exige variantes y fija
+ * `published_at`; archivar saca el producto de la venta sin borrarlo.
+ */
+const publicationSchema = z.object({
+  id: z.string().uuid(),
+  version: z.string().datetime().optional(),
+})
+
+export const adminPublishProduct = createServerFn({ method: 'POST' })
+  .validator(publicationSchema)
+  .handler(async ({ data }): Promise<{ status: string }> => {
+    const result = await setAdminProductStatus(await currentActor(), { ...data, status: 'active' })
+    return { status: result.status }
+  })
+
+export const adminArchiveProduct = createServerFn({ method: 'POST' })
+  .validator(publicationSchema)
+  .handler(async ({ data }): Promise<{ status: string }> => {
+    const result = await setAdminProductStatus(await currentActor(), { ...data, status: 'archived' })
     return { status: result.status }
   })
 
@@ -286,7 +338,7 @@ export const adminAdjustInventory = createServerFn({ method: 'POST' })
 
 // ─── Auditoría ──────────────────────────────────────────────────────────────
 
-export const adminListAudit = createServerFn({ method: 'GET' })
+export const adminListAuditLog = createServerFn({ method: 'GET' })
   .validator(
     z.object({
       entity: z.string().trim().max(60).optional(),
@@ -419,6 +471,177 @@ export const adminListCategories = createServerFn({ method: 'GET' }).handler(
   async (): Promise<AdminCategoryRow[]> => listAdminCategories(await currentActor()),
 )
 
+// ─── Media (Plan 02 §4) ───────────────────────────────────────────────────
+
+export const adminCreateUploadUrl = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      filename: z.string().trim().min(1).max(120),
+      contentType: z.string().trim().min(3).max(80),
+      sizeBytes: z.number().int().positive(),
+    }),
+  )
+  .handler(async ({ data }): Promise<UploadTicket> => createAdminUploadUrl(await currentActor(), data))
+
+export const adminListMedia = createServerFn({ method: 'GET' })
+  .validator(z.object({ productId: z.string().uuid() }))
+  .handler(async ({ data }) => listAdminMedia(await currentActor(), data.productId))
+
+export const adminAttachMedia = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      productId: z.string().uuid(),
+      variantId: z.string().uuid().nullable().optional(),
+      storageKey: z.string().trim().min(3).max(600),
+      alt: z.string().trim().min(1).max(200),
+      width: z.number().int().positive().max(20_000).optional(),
+      height: z.number().int().positive().max(20_000).optional(),
+      position: z.number().int().min(0).max(999).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ id: string }> => attachAdminMedia(await currentActor(), data))
+
+export const adminReorderMedia = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      productId: z.string().uuid(),
+      ids: z.array(z.string().uuid()).min(1).max(100),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ updated: number }> =>
+    reorderAdminMedia(await currentActor(), data),
+  )
+
+export const adminListBrands = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<AdminTaxonomyRow[]> => listAdminBrands(await currentActor()),
+)
+
+export const adminListCollections = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<AdminTaxonomyRow[]> => listAdminCollections(await currentActor()),
+)
+
+const taxonomySchema = z.object({
+  id: z.string().uuid().optional(),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(60)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'El slug solo admite minúsculas, números y guiones'),
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(500).nullable().optional(),
+  position: z.number().int().min(0).max(9_999).optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+})
+
+export const adminUpsertBrand = createServerFn({ method: 'POST' })
+  .validator(taxonomySchema)
+  .handler(async ({ data }): Promise<{ id: string; created: boolean }> =>
+    upsertAdminBrand(await currentActor(), data),
+  )
+
+export const adminUpsertCollection = createServerFn({ method: 'POST' })
+  .validator(taxonomySchema)
+  .handler(async ({ data }): Promise<{ id: string; created: boolean }> =>
+    upsertAdminCollection(await currentActor(), data),
+  )
+
+export const adminReorderCatalog = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      kind: z.enum(['category', 'brand', 'collection']),
+      ids: z.array(z.string().uuid()).min(1).max(500),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ updated: number }> =>
+    reorderAdminCatalog(await currentActor(), data),
+  )
+
+// ─── Cupones y reseñas (Plan 02 §4, §8) ─────────────────────────────────────
+
+export const adminListCoupons = createServerFn({ method: 'GET' })
+  .validator(
+    z.object({
+      q: z.string().trim().max(60).optional(),
+      status: z.enum(['active', 'paused', 'expired', 'archived']).optional(),
+      cursor: z.string().optional().nullable(),
+      size: z.number().int().min(1).max(100).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ items: AdminCouponRow[]; nextCursor: string | null; hasMore: boolean }> => {
+    const page = await listAdminCoupons(await currentActor(), data)
+    return { items: [...page.items], nextCursor: page.nextCursor, hasMore: page.hasMore }
+  })
+
+const couponSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    code: z.string().trim().min(3).max(40).regex(/^[A-Za-z0-9_-]+$/, 'El código solo admite letras, números, guion y guion bajo'),
+    kind: z.enum(['percent', 'fixed', 'free_shipping']),
+    value: z.number().int().nonnegative(),
+    minSubtotalCents: z.number().int().nonnegative().optional(),
+    maxUses: z.number().int().positive().nullable().optional(),
+    maxUsesPerCustomer: z.number().int().positive().nullable().optional(),
+    /** ISO date: la frontera llega como texto y se convierte aquí. */
+    startsAt: z.string().datetime().optional(),
+    endsAt: z.string().datetime().nullable().optional(),
+    status: z.enum(['active', 'paused', 'expired', 'archived']).optional(),
+  })
+  .refine((value) => value.kind !== 'percent' || (value.value >= 1 && value.value <= 100), {
+    message: 'Un cupón por porcentaje vale entre 1 y 100',
+    path: ['value'],
+  })
+  .refine((value) => value.kind !== 'fixed' || value.value > 0, {
+    message: 'Un cupón fijo necesita un importe en céntimos mayor que cero',
+    path: ['value'],
+  })
+  .refine((value) => value.kind !== 'free_shipping' || value.value === 0, {
+    message: 'El cupón de envío gratuito no lleva valor',
+    path: ['value'],
+  })
+
+export const adminUpsertCoupon = createServerFn({ method: 'POST' })
+  .validator(couponSchema)
+  .handler(async ({ data }): Promise<{ id: string; created: boolean }> =>
+    upsertAdminCoupon(await currentActor(), {
+      ...data,
+      startsAt: data.startsAt ? new Date(data.startsAt) : undefined,
+      endsAt: data.endsAt === undefined ? undefined : data.endsAt === null ? null : new Date(data.endsAt),
+    }),
+  )
+
+export const adminSetCouponStatus = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string().uuid(), status: z.enum(['active', 'paused', 'expired', 'archived']) }))
+  .handler(async ({ data }): Promise<{ status: CouponStatus }> =>
+    setAdminCouponStatus(await currentActor(), data),
+  )
+
+export const adminListReviews = createServerFn({ method: 'GET' })
+  .validator(
+    z.object({
+      status: z.enum(['pending', 'approved', 'rejected']).optional(),
+      productId: z.string().uuid().optional(),
+      cursor: z.string().optional().nullable(),
+      size: z.number().int().min(1).max(100).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ items: AdminReviewRow[]; nextCursor: string | null; hasMore: boolean }> => {
+    const page = await listAdminReviews(await currentActor(), data)
+    return { items: [...page.items], nextCursor: page.hasMore ? page.nextCursor : null, hasMore: page.hasMore }
+  })
+
+export const adminModerateReview = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      id: z.string().uuid(),
+      status: z.enum(['pending', 'approved', 'rejected']),
+      note: z.string().trim().max(300).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ status: ReviewStatus }> =>
+    moderateAdminReview(await currentActor(), data),
+  )
+
 const categorySchema = z.object({
   id: z.string().uuid().optional(),
   parentId: z.string().uuid().nullable().optional(),
@@ -495,6 +718,22 @@ export const adminUpsertContent = createServerFn({ method: 'POST' })
     upsertAdminContent(await currentActor(), data),
   )
 
+/**
+ * Nombres congelados del Plan 02 §4: cada tipo de contenido tiene su función y
+ * su clave de invalidación (`content` para el Plan 03).
+ */
+export const adminUpsertHomepageSection = createServerFn({ method: 'POST' })
+  .validator(contentSchema.omit({ kind: true }))
+  .handler(async ({ data }): Promise<{ id: string; created: boolean }> =>
+    upsertAdminContent(await currentActor(), { ...data, kind: 'section' }),
+  )
+
+export const adminUpsertBanner = createServerFn({ method: 'POST' })
+  .validator(contentSchema.omit({ kind: true }))
+  .handler(async ({ data }): Promise<{ id: string; created: boolean }> =>
+    upsertAdminContent(await currentActor(), { ...data, kind: 'banner' }),
+  )
+
 export const adminListUsers = createServerFn({ method: 'GET' })
   .validator(z.object({ q: z.string().trim().max(120).optional() }))
   .handler(async ({ data }): Promise<AdminUserRow[]> =>
@@ -519,8 +758,10 @@ export type { AdminActor } from '@/server/services/admin/actor'
 export type {
   AdminCategoryRow,
   AdminInventoryRow,
+  AdminMediaItem,
   AdminProductDetail,
   AdminProductListItem,
+  AdminTaxonomyRow,
   AdminVariant,
   AuditListItem,
   DashboardKpis,

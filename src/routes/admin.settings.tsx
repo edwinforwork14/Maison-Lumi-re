@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { adminListSettings, adminUpdateSetting } from '@/features/admin/admin.api'
+import { queryKeys } from '@/features/model/queries'
 
 /**
  * Ajustes del sitio. El valor se valida por su tipo en el servidor: un ajuste
@@ -33,8 +34,8 @@ function AdminSettingsPage() {
       setNotice(`Ajuste ${row.key} guardado.`)
       setEditing(null)
       void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
-      // La tienda lee estos valores: su caché debe considerarse obsoleta.
-      void queryClient.invalidateQueries({ queryKey: ['settings'] })
+      // La tienda lee estos valores (checkout, ficha): su caché se invalida.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.siteSettings() })
     },
     onError: (error: Error) => setNotice(error.message),
   })

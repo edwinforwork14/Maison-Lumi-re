@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { adminListAudit } from '@/features/admin/admin.api'
+import { adminListAuditLog } from '@/features/admin/admin.api'
 
 /** Auditoría: tabla append-only, sólo lectura y con filtro por entidad. */
 export const Route = createFileRoute('/admin/audit')({
@@ -13,7 +13,7 @@ function AdminAuditPage() {
 
   const entries = useQuery({
     queryKey: ['admin', 'audit', entity],
-    queryFn: () => adminListAudit({ data: { entity: entity.trim() || undefined, limit: 50 } }),
+    queryFn: () => adminListAuditLog({ data: { entity: entity.trim() || undefined, limit: 50 } }),
   })
 
   return (

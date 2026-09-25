@@ -3,6 +3,7 @@ import { StoreProvider } from '@/lib/store'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { CartDrawer } from '@/components/cart/CartDrawer'
+import { QuickViewProvider } from '@/features/quick-view/quick-view'
 import { listCategories, listCollections } from '@/features/commerce.api'
 
 /**
@@ -32,14 +33,19 @@ function StorefrontLayout() {
 
   return (
     <StoreProvider>
-      <div className="flex min-h-screen flex-col">
-        <Header categories={navigation.categories} collections={navigation.collections} />
-        <main id="main" className="flex-1">
-          <Outlet />
-        </main>
-        <Footer categories={navigation.categories} />
-      </div>
-      <CartDrawer />
+      {/* Ficha como overlay: el scroll y los filtros de la página de fondo
+          nunca se pierden al abrir un producto (brief overlay §2). Envuelve
+          el layout para que las tarjetas puedan abrir el quick-view. */}
+      <QuickViewProvider>
+        <div className="flex min-h-screen flex-col">
+          <Header categories={navigation.categories} collections={navigation.collections} />
+          <main id="main" className="flex-1">
+            <Outlet />
+          </main>
+          <Footer categories={navigation.categories} />
+        </div>
+        <CartDrawer />
+      </QuickViewProvider>
     </StoreProvider>
   )
 }

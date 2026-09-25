@@ -7,12 +7,15 @@
  * desaparece porque ahora solo existe este pipeline.
  */
 
-export type SortId =
-  | 'recommended'
-  | 'price-asc'
-  | 'price-desc'
-  | 'bestsellers'
-  | 'new'
+export const SORT_IDS = [
+  'recommended',
+  'price-asc',
+  'price-desc',
+  'bestsellers',
+  'new',
+] as const
+
+export type SortId = (typeof SORT_IDS)[number]
 
 export interface ProductLike {
   name: string

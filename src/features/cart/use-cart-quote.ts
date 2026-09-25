@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { quoteCart, type CartQuote } from '@/features/commerce.api'
+import { queryKeys } from '@/features/model/queries'
 import { useStore } from '@/lib/store'
 import type { ShippingMethodId } from '@/domain/pricing'
 
@@ -19,8 +20,12 @@ export interface CartQuoteState {
   refetch: () => void
 }
 
-export function useCartQuote(shippingMethod?: ShippingMethodId): CartQuoteState {
+export function useCartQuote(
+  shippingMethod?: ShippingMethodId,
+  couponCode?: string,
+): CartQuoteState {
   const { cart } = useStore()
+  const code = couponCode?.trim() ?? ''
   const lines = useMemo(
     () =>
       cart.map((l) => ({
@@ -32,10 +37,12 @@ export function useCartQuote(shippingMethod?: ShippingMethodId): CartQuoteState 
   )
 
   const query = useQuery({
-    queryKey: ['cart-quote', lines, shippingMethod ?? 'standard'],
-    queryFn: () => quoteCart({ data: { lines, shippingMethod } }),
+    queryKey: queryKeys.cartQuote(lines, shippingMethod ?? 'standard', code),
+    queryFn: () => quoteCart({ data: { lines, shippingMethod, couponCode: code || undefined } }),
     enabled: lines.length > 0,
     staleTime: 30_000,
+    // Un código de cupón inválido no debe cachearse como si fuera la verdad.
+    retry: false,
   })
 
   return {

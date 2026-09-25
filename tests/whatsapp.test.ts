@@ -32,10 +32,12 @@ const line = {
 const quote: CartQuote = {
   lines: [line],
   subtotal: line.lineTotal,
+  discount: money(0),
   shipping: money(1_200),
   total: add(line.lineTotal, money(1_200)),
   freeShippingRemaining: money(0),
   shippingOptions: [],
+  coupon: null,
 }
 
 const summary = {

@@ -1,142 +1,127 @@
 import { useState } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { useStore } from '@/lib/store'
-import {
-  buildNavSections,
-  MegaMenu,
-  type NavCategory,
-  type NavCollection,
-  type NavSection,
-} from './MegaMenu'
-import { MobileMenu } from './MobileMenu'
+import { Icon } from '@/components/ui/Icon'
+import { AnnouncementBar } from './AnnouncementBar'
+import { MenuModal } from './MenuModal'
+import { MegaDropdown } from './MegaDropdown'
 import { SearchOverlay } from './SearchOverlay'
+import { useMegaMenu } from './use-mega-menu'
+import type { NavCategory, NavCollection } from './MegaMenu'
 
 export interface HeaderProps {
   readonly categories: readonly NavCategory[]
   readonly collections: readonly NavCollection[]
 }
 
+/**
+ * Cabecera de la referencia (Plan 04 §2.1): tres zonas —botones «Menú» y
+ * «Buscar» a la izquierda, wordmark centrado, wishlist y carrito con el
+ * contador dentro del botón a la derecha— y altura de 3.375 rem.
+ *
+ * Sobre el botón «Menú» vive el mega dropdown multinivel por hover (brief
+ * §1–§3), sólo en desktop con puntero fino; el click sigue abriendo el modal
+ * fullscreen y en táctil el modal es la única vía (§13).
+ */
 export function Header({ categories, collections }: HeaderProps) {
   const { cartCount, setCartOpen } = useStore()
-  const navSections = buildNavSections(categories, collections)
-  const [openNav, setOpenNav] = useState<NavSection | null>(null)
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const navigate = useNavigate()
+  const mega = useMegaMenu()
 
   return (
     <>
+      <AnnouncementBar />
       <header
-        className="sticky top-0 z-40 border-b border-linen bg-ivory/95 backdrop-blur"
-        onMouseLeave={() => setOpenNav(null)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpenNav(null)
-        }}
+        /* El cierre sólo se programa al salir del header completo: el panel
+           es hijo suyo (top-full), así que recorrer botón → header → panel
+           nunca dispara `scheduleClose` (brief §15/§19). */
+        onMouseEnter={mega.cancelClose}
+        onMouseLeave={mega.scheduleClose}
+        className="sticky top-0 z-40 border-b border-line bg-frost backdrop-blur-[10px]"
       >
-        {/* Barra superior editorial */}
-        <div className="hidden bg-sand px-8 py-2 text-center label-xs-wide text-taupe md:block">
-          Envío gratuito a partir de 500 € · Devoluciones extendidas 30 días
-        </div>
-
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-8">
-          {/* Mobile: hamburger */}
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            className="p-2 lg:hidden"
-            aria-label="Abrir menú"
-          >
-            <span className="block w-6 border-t border-ink" />
-            <span className="mt-1.5 block w-6 border-t border-ink" />
-            <span className="mt-1.5 block w-4 border-t border-ink" />
-          </button>
-
-          {/* Nav izquierda (desktop) */}
-          <nav className="hidden flex-1 items-center gap-8 lg:flex">
-            {navSections.map((section) => (
-              <div key={section.label} className="group-nav relative">
-                <Link
-                  to={section.to}
-                  onMouseEnter={() => setOpenNav(section)}
-                  onFocus={() => setOpenNav(section)}
-                  aria-expanded={openNav?.label === section.label}
-                  className={`py-2 label transition-colors ${
-                    openNav?.label === section.label
-                      ? 'text-ink'
-                      : 'text-charcoal hover:text-taupe'
-                  }`}
-                >
-                  {section.label}
-                </Link>
-              </div>
-            ))}
-          </nav>
-
-          {/* Logo centrado */}
-          <Link to="/" className="shrink-0 px-4 lg:absolute lg:left-1/2 lg:-translate-x-1/2">
-            <span className="font-serif text-xl tracking-[0.3em] md:text-2xl">
-              MAISON LUMIÈRE
-            </span>
-          </Link>
-
-          {/* Iconos derecha */}
-          <div className="flex flex-1 items-center justify-end gap-4 md:gap-6">
+        <div className="grid min-h-[3.375rem] grid-cols-[1fr_auto_1fr] items-center gap-2.5 px-5 py-[0.938rem] md:px-10">
+          {/* Zona izquierda: Menú + Buscar (texto + icono, §2.1) */}
+          <div className="flex items-center gap-5">
+            <button
+              type="button"
+              onMouseEnter={mega.open}
+              onClick={() => {
+                // El click conserva el modal fullscreen (decisión de producto);
+                // el dropdown se rige por hover y se cierra al pulsar.
+                mega.close()
+                setMenuOpen(true)
+              }}
+              aria-haspopup="true"
+              aria-expanded={mega.state.isOpen || menuOpen}
+              className="flex items-center gap-2 text-[13px] uppercase tracking-[0.2em] transition-colors hover:text-text-secondary"
+            >
+              <Icon name="menu" size={18} />
+              Menú
+            </button>
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="text-sm uppercase tracking-[0.15em] text-charcoal transition-colors hover:text-taupe max-md:hidden"
-              aria-label="Buscar"
+              className="flex items-center gap-2 text-[13px] uppercase tracking-[0.2em] transition-colors hover:text-text-secondary"
             >
+              <Icon name="search" size={18} />
               Buscar
             </button>
-            <Link
-              to="/account"
-              className="text-sm transition-colors hover:text-taupe max-md:hidden"
-              aria-label="Cuenta"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
-              </svg>
-            </Link>
+          </div>
+
+          {/* Centro: wordmark */}
+          <Link
+            to="/"
+            className="whitespace-nowrap text-center text-[15px] font-medium uppercase tracking-[0.35em] transition-colors hover:text-text-secondary"
+          >
+            Maison Lumière
+          </Link>
+
+          {/* Zona derecha: wishlist + carrito con contador dentro (§2.1) */}
+          <div className="flex items-center justify-end gap-5">
             <Link
               to="/wishlist"
-              className="text-sm transition-colors hover:text-taupe max-md:hidden"
               aria-label="Wishlist"
+              className="transition-colors hover:text-text-secondary"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-                <path d="M12 21s-7.5-4.8-9.6-9.1C.9 8.7 2.6 5 6.1 5c2.1 0 3.7 1.2 4.6 2.5H13.3C14.2 6.2 15.8 5 17.9 5c3.5 0 5.2 3.7 3.7 6.9C19.5 16.2 12 21 12 21z" transform="scale(0.92) translate(1,1)" />
-              </svg>
+              <Icon name="heart" size={18} />
             </Link>
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="relative text-sm transition-colors hover:text-taupe"
               aria-label="Abrir carrito"
+              className="flex items-center gap-1.5 transition-colors hover:text-text-secondary"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-                <path d="M6 8h12l-1 13H7L6 8z" />
-                <path d="M9 8V6a3 3 0 0 1 6 0v2" />
-              </svg>
+              <Icon name="cart" size={18} />
               {cartCount > 0 && (
-                <span className="absolute -right-2 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-ink text-[9px] text-ivory">
-                  {cartCount}
-                </span>
+                <span className="text-[11px] tabular-nums">{cartCount}</span>
               )}
+              {/* Anuncio a lectores de pantalla al actualizar el carrito (§9) */}
+              <span role="status" className="sr-only">
+                {cartCount > 0
+                  ? `${cartCount} ${cartCount === 1 ? 'artículo' : 'artículos'} en el carrito`
+                  : 'Carrito vacío'}
+              </span>
             </button>
           </div>
         </div>
 
-        {/* Mega menú */}
-        {openNav && <MegaMenu section={openNav} />}
-      </header>
-
-      <MobileMenu
-          open={mobileOpen}
-          onClose={() => setMobileOpen(false)}
+        {/* Dropdown multinivel: es hijo del header, así que `top-full` lo ancla
+            justo debajo sin hueco real con el botón (brief §19). */}
+        <MegaDropdown
           categories={categories}
           collections={collections}
+          menu={mega}
         />
+      </header>
+
+      <MenuModal
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        categories={categories}
+        collections={collections}
+        onSearch={() => setSearchOpen(true)}
+      />
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   )

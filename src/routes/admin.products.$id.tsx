@@ -2,15 +2,20 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
+  adminAttachMedia,
   adminDeleteVariant,
   adminGetProduct,
   adminListCategories,
+  adminArchiveProduct,
+  adminPublishProduct,
+  adminReorderMedia,
   adminSetProductStatus,
   adminUpdateProduct,
   adminUpsertVariant,
   type AdminVariant,
 } from '@/features/admin/admin.api'
 import { formatCents } from '@/lib/money-format'
+import { queryKeys } from '@/features/model/queries'
 
 /**
  * Ficha de producto: edición, variantes y publicación.
@@ -41,11 +46,18 @@ function AdminProductDetailPage() {
     void queryClient.invalidateQueries({ queryKey: ['admin', 'product', id] })
     void queryClient.invalidateQueries({ queryKey: ['admin', 'products'] })
     void queryClient.invalidateQueries({ queryKey: ['admin', 'inventory'] })
+    // La tienda lee el catálogo público: precio, stock y estado deben
+    // reflejarse sin esperar al staleTime (contrato Plan 02 §4 → 03).
+    void queryClient.invalidateQueries({ queryKey: queryKeys.products() })
   }
+
+  // Versión leída (`updated_at`): el servidor rechaza con CONFLICT si otro
+  // usuario guardó entre medias (Plan 02 §3, edición optimista).
+  const version = product.data ? new Date(product.data.updatedAt).toISOString() : undefined
 
   const saveProduct = useMutation({
     mutationFn: (patch: { name?: string; categoryId?: string; featured?: boolean }) =>
-      adminUpdateProduct({ data: { id, ...patch } }),
+      adminUpdateProduct({ data: { id, version, ...patch } }),
     onSuccess: (result) =>
       setNotice(
         result.changed.length === 0
@@ -56,8 +68,13 @@ function AdminProductDetailPage() {
   })
 
   const setStatus = useMutation({
-    mutationFn: (status: 'draft' | 'active' | 'archived') =>
-      adminSetProductStatus({ data: { id, status } }),
+    mutationFn: (status: 'draft' | 'active' | 'archived') => {
+      // Nombres congelados del Plan 02 §4: publicar y archivar son acciones
+      // propias; volver a borrador pasa por el cambio genérico de estado.
+      if (status === 'active') return adminPublishProduct({ data: { id, version } })
+      if (status === 'archived') return adminArchiveProduct({ data: { id, version } })
+      return adminSetProductStatus({ data: { id, status, version } })
+    },
     onSuccess: (result) => setNotice(`Estado: ${result.status}.`),
     onError: (error: Error) => setNotice(error.message),
   })
@@ -91,6 +108,36 @@ function AdminProductDetailPage() {
     },
     onError: (error: Error) => setNotice(error.message),
   })
+
+  const addMedia = useMutation({
+    mutationFn: (input: { storageKey: string; alt: string }) =>
+      adminAttachMedia({ data: { productId: id, ...input } }),
+    onSuccess: () => {
+      setNotice('Imagen adjuntada.')
+      invalidate()
+    },
+    onError: (error: Error) => setNotice(error.message),
+  })
+
+  const reorderMedia = useMutation({
+    mutationFn: (ids: string[]) => adminReorderMedia({ data: { productId: id, ids } }),
+    onSuccess: () => invalidate(),
+    onError: (error: Error) => setNotice(error.message),
+  })
+
+  /** Mueve una imagen una posición y reenvía el orden completo. */
+  const moveMedia = (
+    media: readonly { id: string }[],
+    index: number,
+    delta: -1 | 1,
+  ) => {
+    const next = [...media]
+    const target = index + delta
+    if (target < 0 || target >= next.length) return
+    const [moved] = next.splice(index, 1)
+    next.splice(target, 0, moved!)
+    reorderMedia.mutate(next.map((item) => item.id))
+  }
 
   if (product.isPending) {
     return (
@@ -278,6 +325,88 @@ function AdminProductDetailPage() {
               className="btn btn-solid px-4 py-3 label disabled:bg-clay"
             >
               Añadir
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="border-t border-linen pt-6">
+        <h3 className="mb-4 eyebrow">Imágenes ({detail.media.length})</h3>
+
+        {detail.media.length === 0 ? (
+          <p className="border border-linen p-4 text-sm text-taupe">
+            Sin imágenes: la ficha de la tienda no tendrá foto.
+          </p>
+        ) : (
+          <ul className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {detail.media.map((item, index) => (
+              <li key={item.id} className="border border-linen">
+                <div className="aspect-[3/4] bg-sand">
+                  <img
+                    src={item.storageKey}
+                    alt={item.alt}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2 p-3">
+                  <p className="min-w-0 truncate text-xs text-taupe">
+                    {index + 1}. {item.alt}
+                  </p>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      disabled={index === 0 || reorderMedia.isPending}
+                      onClick={() => moveMedia(detail.media, index, -1)}
+                      aria-label={`Mover ${item.alt} hacia arriba`}
+                      className="btn btn-outline px-2 py-1 label disabled:opacity-40"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === detail.media.length - 1 || reorderMedia.isPending}
+                      onClick={() => moveMedia(detail.media, index, 1)}
+                      aria-label={`Mover ${item.alt} hacia abajo`}
+                      className="btn btn-outline px-2 py-1 label disabled:opacity-40"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form
+          className="mt-6 grid gap-3 border border-linen p-4 sm:grid-cols-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const form = new FormData(event.currentTarget)
+            addMedia.mutate({
+              storageKey: String(form.get('url') ?? ''),
+              alt: String(form.get('alt') ?? ''),
+            })
+            event.currentTarget.reset()
+          }}
+        >
+          <p className="sm:col-span-4 eyebrow">Adjuntar imagen por URL</p>
+          <label>
+            <span className="mb-1 block label text-taupe">URL de la imagen</span>
+            <input name="url" type="url" required className="field" />
+          </label>
+          <label>
+            <span className="mb-1 block label text-taupe">Texto alternativo</span>
+            <input name="alt" maxLength={200} required className="field" />
+          </label>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              disabled={addMedia.isPending}
+              className="btn btn-solid px-4 py-3 label disabled:bg-clay"
+            >
+              {addMedia.isPending ? 'Adjuntando…' : 'Adjuntar'}
             </button>
           </div>
         </form>

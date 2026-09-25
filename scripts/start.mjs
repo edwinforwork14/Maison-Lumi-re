@@ -3,9 +3,16 @@
  * El build de TanStack Start genera dist/server/server.js con un handler
  * `fetch` estilo WinterCG; este wrapper lo expone vía HTTP en Node y sirve
  * los assets estáticos de dist/client (JS/CSS/imágenes).
+ *
+ * Carga `.env` del raíz del proyecto ANTES de importar el servidor: el módulo
+ * de entorno (`server/runtime/env.ts`) valida `process.env` al importarse, así
+ * que las variables deben existir antes de ese import. Las variables ya
+ * presentes en el proceso mandan (no se sobreescriben), igual que
+ * `node --env-file`.
  */
 import { createServer } from 'node:http'
 import { stat, readFile } from 'node:fs/promises'
+import { existsSync, readFileSync } from 'node:fs'
 import { extname, join, normalize, sep } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
@@ -13,6 +20,28 @@ import { dirname, resolve } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const serverPath = resolve(__dirname, '../dist/server/server.js')
 const clientDir = resolve(__dirname, '../dist/client')
+
+// ─── Carga de .env (antes de cualquier import del servidor) ──────────────────────────
+const envPath = resolve(__dirname, '../.env')
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq <= 0) continue
+    const key = trimmed.slice(0, eq).trim()
+    let value = trimmed.slice(eq + 1).trim()
+    // Comillas envolventes: se retiran (convención común de .env).
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    // Lo ya presente en el proceso manda: permite `DATABASE_URL=... pnpm start`.
+    if (process.env[key] === undefined) process.env[key] = value
+  }
+}
 
 const PORT = Number(process.env.PORT ?? 3000)
 const HOST = process.env.HOST ?? '0.0.0.0'

@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store'
 import { formatMoney } from '@/lib/money-format'
 import { isZero, type Money } from '@/domain/money'
 import { getSiteSettings, placeOrder, type CartQuote } from '@/features/commerce.api'
+import { queryKeys } from '@/features/model/queries'
 import { useCartQuote } from '@/features/cart/use-cart-quote'
 import { buildWhatsAppOrderLink } from '@/lib/whatsapp'
 import type { ShippingMethodId } from '@/domain/pricing'
@@ -44,6 +45,9 @@ function CheckoutPage() {
   const { cart, clearCart } = useStore()
   const [form, setForm] = useState<FormData>(initialForm)
   const [shipping, setShipping] = useState<ShippingMethodId>('standard')
+  // Código de descuento: se escribe aquí, pero lo valida y aplica el servidor.
+  const [couponDraft, setCouponDraft] = useState('')
+  const [couponCode, setCouponCode] = useState('')
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null)
   const [placedTotal, setPlacedTotal] = useState<Money | null>(null)
@@ -63,11 +67,12 @@ function CheckoutPage() {
     [cart],
   )
 
-  // Fuente única de verdad del dinero: el servidor cotiza subtotal, envío y total.
-  const { quote, isLoading } = useCartQuote(shipping)
+  // Fuente única de verdad del dinero: el servidor cotiza subtotal, envío,
+  // descuento del cupón y total.
+  const { quote, isLoading, isError: quoteFailed } = useCartQuote(shipping, couponCode)
   // Ajustes del sitio: incluye el WhatsApp con el que se cierra la compra.
   const { data: settings } = useQuery({
-    queryKey: ['site-settings'],
+    queryKey: queryKeys.siteSettings(),
     queryFn: () => getSiteSettings(),
     staleTime: 5 * 60_000,
   })
@@ -115,6 +120,7 @@ function CheckoutPage() {
         data: {
           lines,
           shippingMethod: shipping,
+          couponCode: couponCode || undefined,
           customer: { ...form },
           idempotencyKey,
         },
@@ -159,21 +165,21 @@ function CheckoutPage() {
   if (placedOrderNumber) {
     return (
       <div className="mx-auto max-w-2xl animate-fade-up px-4 py-24 text-center md:py-32">
-        <p className="mb-3 label-wide tracking-[0.3em] text-taupe">
+        <p className="mb-3 label-wide tracking-[0.3em] text-text-secondary">
           Pedido confirmado
         </p>
-        <h1 className="mb-4 font-serif text-4xl font-light md:text-5xl">
+        <h1 className="mb-4 editorial-title">
           Gracias por su compra
         </h1>
-        <p className="mb-2 text-sm text-taupe">
-          Su pedido <span className="text-ink">{placedOrderNumber}</span> ha
+        <p className="mb-2 text-sm text-text-secondary">
+          Su pedido <span className="text-strong">{placedOrderNumber}</span> ha
           sido registrado correctamente.
         </p>
-        <p className="mb-10 text-sm text-taupe">
+        <p className="mb-10 text-sm text-text-secondary">
           Le hemos reservado las piezas. Cierre el pedido por WhatsApp y lo
           confirmamos desde la tienda; también puede escribirnos desde {form.email}.
         </p>
-        <div className="mx-auto mb-10 max-w-sm bg-sand p-8 text-left text-sm">
+        <div className="mx-auto mb-10 max-w-sm bg-subtle p-8 text-left text-sm">
           <p className="mb-4 eyebrow">Resumen</p>
           <div className="flex justify-between py-1">
             <span>Total</span>
@@ -181,7 +187,7 @@ function CheckoutPage() {
               {placedTotal ? formatMoney(placedTotal) : '—'}
             </span>
           </div>
-          <div className="flex justify-between py-1 text-taupe">
+          <div className="flex justify-between py-1 text-text-secondary">
             <span>Envío</span>
             <span>
               {quote?.shippingOptions.find((o) => o.id === shipping)?.label ??
@@ -199,7 +205,7 @@ function CheckoutPage() {
             Confirmar por WhatsApp
           </a>
         ) : (
-          <p className="mb-3 text-xs text-taupe">
+          <p className="mb-3 text-xs text-text-secondary">
             El número de WhatsApp de la tienda no está configurado todavía.
           </p>
         )}
@@ -215,10 +221,10 @@ function CheckoutPage() {
   if (lines.length === 0) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-24 text-center">
-        <h1 className="mb-4 font-serif text-3xl font-light">
+        <h1 className="mb-4 editorial-title">
           Su carrito está vacío
         </h1>
-        <p className="mb-10 text-sm text-taupe">
+        <p className="mb-10 text-sm text-text-secondary">
           Añada piezas al carrito para finalizar la compra.
         </p>
         <Link to="/shop" className="btn btn-outline px-8 py-3 label">
@@ -229,13 +235,13 @@ function CheckoutPage() {
   }
 
   const inputCls = (field: keyof FormData) =>
-    `w-full border bg-transparent px-4 py-3 text-sm outline-none transition-colors placeholder:text-clay focus:border-ink ${
-      errors[field] ? 'border-gold' : 'border-linen'
+    `w-full border bg-transparent px-4 py-3 text-sm outline-none transition-colors placeholder:text-text-secondary focus:border-strong ${
+      errors[field] ? 'border-gold' : 'border-line'
     }`
 
   return (
     <div className="mx-auto max-w-7xl animate-fade-in px-4 py-14 md:px-8 md:py-20">
-      <h1 className="mb-10 font-serif text-4xl font-light">Checkout</h1>
+      <h1 className="mb-10 editorial-title">Checkout</h1>
 
       <form
         onSubmit={handleSubmit}
@@ -336,7 +342,7 @@ function CheckoutPage() {
           <section>
             <h2 className="mb-6 eyebrow">3 — Método de envío</h2>
             {isLoading || !quote ? (
-              <p className="text-sm text-taupe">Calculando opciones de envío…</p>
+              <p className="text-sm text-text-secondary">Calculando opciones de envío…</p>
             ) : (
               <div className="space-y-3">
                 {quote.shippingOptions.map((option) => (
@@ -344,8 +350,8 @@ function CheckoutPage() {
                     key={option.id}
                     className={`flex cursor-pointer items-center justify-between border px-5 py-4 transition-colors ${
                       shipping === option.id
-                        ? 'border-ink'
-                        : 'border-linen hover:border-clay'
+                        ? 'border-strong'
+                        : 'border-line hover:border-line-medium'
                     }`}
                   >
                     <span className="flex items-center gap-4">
@@ -358,7 +364,7 @@ function CheckoutPage() {
                       />
                       <span>
                         <span className="block text-sm">{option.label}</span>
-                        <span className="block text-xs text-taupe">
+                        <span className="block text-xs text-text-secondary">
                           {option.description}
                         </span>
                       </span>
@@ -375,9 +381,9 @@ function CheckoutPage() {
 
         {/* Resumen — pintado desde la cotización del servidor */}
         <aside>
-          <div className="bg-sand p-8 lg:sticky lg:top-32">
+          <div className="bg-subtle p-8 lg:sticky lg:top-32">
             <h2 className="mb-6 eyebrow">Su pedido</h2>
-            <ul className="mb-6 space-y-4 border-b border-linen pb-6">
+            <ul className="mb-6 space-y-4 border-b border-line pb-6">
               {(quote?.lines ?? []).map((line) => (
                 <li key={line.variantId} className="flex gap-4">
                   <img
@@ -387,7 +393,7 @@ function CheckoutPage() {
                   />
                   <div className="flex-1 text-sm">
                     <p>{line.name}</p>
-                    <p className="text-xs text-taupe">
+                    <p className="text-xs text-text-secondary">
                       {line.color} · ×{line.quantity}
                     </p>
                   </div>
@@ -414,13 +420,67 @@ function CheckoutPage() {
                       : '—'}
                 </dd>
               </div>
-              <div className="flex justify-between border-t border-linen pt-3 text-base">
+              {quote?.coupon && !isZero(quote.discount) && (
+                <div className="flex justify-between text-text-secondary">
+                  <dt>Descuento ({quote.coupon.code})</dt>
+                  <dd className="tabular-nums">−{formatMoney(quote.discount)}</dd>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-line pt-3 text-base">
                 <dt className="uppercase tracking-[0.15em]">Total</dt>
                 <dd className="font-medium tabular-nums">
                   {quote ? formatMoney(quote.total) : '—'}
                 </dd>
               </div>
             </dl>
+
+            {/* Cupón: el cliente sólo envía el código; el importe lo decide el servidor. */}
+            <div className="mt-6 border-t border-line pt-6">
+              <label className="mb-2 block label text-text-secondary" htmlFor="coupon">
+                Código de descuento
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="coupon"
+                  value={couponDraft}
+                  onChange={(event) => setCouponDraft(event.target.value.toUpperCase())}
+                  placeholder="VERANO26"
+                  className="w-full border border-line bg-transparent px-3 py-2 text-sm uppercase outline-none focus:border-strong"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCouponCode(couponDraft.trim().toUpperCase())}
+                  className="btn btn-outline px-4 py-2 label"
+                >
+                  Aplicar
+                </button>
+              </div>
+              {couponCode && (
+                <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+                  {quoteFailed ? (
+                    <span className="text-gold">
+                      El código {couponCode} no se puede aplicar.
+                    </span>
+                  ) : quote?.coupon ? (
+                    <span>
+                      Cupón {quote.coupon.code} aplicado.
+                    </span>
+                  ) : (
+                    <span>Comprobando el código…</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCouponCode('')
+                      setCouponDraft('')
+                    }}
+                    className="underline underline-offset-2 hover:text-strong"
+                  >
+                    Quitar
+                  </button>
+                </p>
+              )}
+            </div>
             {blocked && (
               <p className="mt-4 text-xs text-gold">
                 {oversold
@@ -435,11 +495,11 @@ function CheckoutPage() {
             <button
               type="submit"
               disabled={submitting || !quote || blocked}
-              className="btn btn-solid btn-block label-wide mt-8 disabled:cursor-not-allowed disabled:bg-clay"
+              className="btn btn-solid btn-block label-wide mt-8 disabled:cursor-not-allowed disabled:bg-line-light"
             >
               {submitting ? 'Procesando…' : 'Confirmar pedido'}
             </button>
-            <p className="mt-4 text-center text-[11px] text-taupe">
+            <p className="mt-4 text-center text-[11px] text-text-secondary">
               Sin pago en línea: el pedido se confirma por WhatsApp
             </p>
           </div>

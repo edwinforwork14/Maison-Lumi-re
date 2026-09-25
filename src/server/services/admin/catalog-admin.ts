@@ -13,7 +13,14 @@ import { getDb, type Database } from '../../db/client.ts'
 import { clampPageSize, decodeCursor, paginate, type Page } from '../../db/pagination.ts'
 import { inventoryItems, inventoryMovements } from '../../db/schema/inventory.ts'
 import { orderItems, orders } from '../../db/schema/orders.ts'
-import { categories, products, productVariants } from '../../db/schema/catalog.ts'
+import {
+  brands,
+  categories,
+  collections,
+  products,
+  productMedia,
+  productVariants,
+} from '../../db/schema/catalog.ts'
 import { createPostgresAuditRepository } from '../../db/repositories/audit.postgres.ts'
 import { createPostgresInventoryRepository } from '../../db/repositories/inventory.postgres.ts'
 import { AppError } from '../../errors.ts'
@@ -129,6 +136,22 @@ export interface AdminProductPatch {
   readonly seoDescription?: string | null
 }
 
+/**
+ * Edición optimista (Plan 02 §3): el cliente devuelve la `version` que leyó
+ * (`updated_at` en ISO) y, si otro usuario guardó entre medias, se rechaza con
+ * `CONFLICT` en lugar de pisarse. Sin `version` no se comprueba nada, para no
+ * romper llamadas que no participan del contrato.
+ */
+export function assertVersion(current: Date, version: string | undefined): void {
+  if (!version) return
+  if (current.toISOString() !== version) {
+    throw new AppError(
+      'CONFLICT',
+      'El registro cambió mientras lo editaba otra persona: recargue y vuelva a intentarlo',
+    )
+  }
+}
+
 /** Crea un producto en borrador y lo deja auditado. */
 export async function createAdminProduct(
   actor: AdminActor | null,
@@ -179,7 +202,7 @@ export async function createAdminProduct(
 /** Actualiza un producto, guardando sólo los campos que cambian. */
 export async function updateAdminProduct(
   actor: AdminActor | null,
-  input: { id: string } & AdminProductPatch,
+  input: { id: string; version?: string } & AdminProductPatch,
   db: Database = getDb(),
 ): Promise<{ changed: string[] }> {
   assertPermission(actor, PERMISSIONS.productsWrite)
@@ -192,6 +215,7 @@ export async function updateAdminProduct(
       .where(eq(products.id, input.id))
       .for('update')
     if (!current) throw new AppError('NOT_FOUND', 'Producto inexistente')
+    assertVersion(current.updatedAt, input.version)
 
     const patch: Record<string, unknown> = {}
     const before: Record<string, unknown> = {}
@@ -242,7 +266,7 @@ export async function updateAdminProduct(
  */
 export async function setAdminProductStatus(
   actor: AdminActor | null,
-  input: { id: string; status: 'draft' | 'active' | 'archived' },
+  input: { id: string; status: 'draft' | 'active' | 'archived'; version?: string },
   db: Database = getDb(),
 ): Promise<{ status: string; publishedAt: Date | null }> {
   assertPermission(actor, PERMISSIONS.productsPublish)
@@ -255,6 +279,7 @@ export async function setAdminProductStatus(
       .where(eq(products.id, input.id))
       .for('update')
     if (!current) throw new AppError('NOT_FOUND', 'Producto inexistente')
+    assertVersion(current.updatedAt, input.version)
 
     if (input.status === 'active') {
       const [variants] = await tx
@@ -614,7 +639,20 @@ export interface AdminProductDetail {
   readonly description: string | null
   readonly seoTitle: string | null
   readonly seoDescription: string | null
+  /** Versión para edición optimista (`updated_at`). */
+  readonly updatedAt: Date
   readonly variants: readonly AdminVariant[]
+  /** Imágenes en orden; la subida se hace con URL pre-firmada (Plan 02 §4). */
+  readonly media: readonly AdminMediaItem[]
+}
+
+export interface AdminMediaItem {
+  readonly id: string
+  readonly storageKey: string
+  readonly alt: string
+  readonly position: number
+  readonly width: number
+  readonly height: number
 }
 
 export async function getAdminProduct(
@@ -648,6 +686,19 @@ export async function getAdminProduct(
     .where(eq(productVariants.productId, productId))
     .orderBy(asc(productVariants.color), asc(productVariants.size))
 
+  const mediaRows = await db
+    .select({
+      id: productMedia.id,
+      storageKey: productMedia.storageKey,
+      alt: productMedia.alt,
+      position: productMedia.position,
+      width: productMedia.width,
+      height: productMedia.height,
+    })
+    .from(productMedia)
+    .where(eq(productMedia.productId, productId))
+    .orderBy(asc(productMedia.position))
+
   return {
     id: product.id,
     slug: product.slug,
@@ -660,6 +711,8 @@ export async function getAdminProduct(
     description: product.description,
     seoTitle: product.seoTitle,
     seoDescription: product.seoDescription,
+    updatedAt: product.updatedAt,
+    media: mediaRows,
     variants: variants.map((variant) => {
       const onHand = variant.onHand ?? 0
       const reserved = variant.reserved ?? 0
@@ -1018,5 +1071,188 @@ export async function upsertAdminCategory(
       after: { slug: values.slug, name: values.name },
     })
     return { id: created!.id, created: true }
+  })
+}
+
+// ─── Marcas y colecciones (Plan 02 §4: `adminUpsertBrand` / `adminUpsertCollection`) ──
+
+export interface AdminTaxonomyRow {
+  readonly id: string
+  readonly slug: string
+  readonly name: string
+  readonly description: string | null
+  readonly position: number
+  readonly status: string
+  readonly productCount: number
+}
+
+export type TaxonomyKind = 'brand' | 'collection'
+
+const taxonomyTable = {
+  brand: brands,
+  collection: collections,
+} as const
+
+const taxonomyEntity = { brand: 'brands', collection: 'collections' } as const
+
+async function listTaxonomy(
+  actor: AdminActor | null,
+  kind: TaxonomyKind,
+  db: Database,
+): Promise<AdminTaxonomyRow[]> {
+  assertPermission(actor, PERMISSIONS.productsRead)
+  const table = taxonomyTable[kind]
+  const productColumn = kind === 'brand' ? sql`p.brand_id` : sql`p.collection_id`
+  const rows = await db
+    .select({
+      id: table.id,
+      slug: table.slug,
+      name: table.name,
+      description: table.description,
+      position: table.position,
+      status: table.status,
+      productCount: sql<number>`(
+        select count(*)::int from products p
+        where ${productColumn} = ${table.id} and p.deleted_at is null
+      )`,
+    })
+    .from(table)
+    .orderBy(asc(table.position), asc(table.name))
+  return rows.map((row) => ({ ...row, productCount: Number(row.productCount) }))
+}
+
+export function listAdminBrands(actor: AdminActor | null, db: Database = getDb()): Promise<AdminTaxonomyRow[]> {
+  return listTaxonomy(actor, 'brand', db)
+}
+
+export function listAdminCollections(
+  actor: AdminActor | null,
+  db: Database = getDb(),
+): Promise<AdminTaxonomyRow[]> {
+  return listTaxonomy(actor, 'collection', db)
+}
+
+export interface TaxonomyInput {
+  readonly id?: string
+  readonly slug: string
+  readonly name: string
+  readonly description?: string | null
+  readonly position?: number
+  readonly status?: 'draft' | 'active' | 'archived'
+}
+
+async function upsertTaxonomy(
+  actor: AdminActor | null,
+  kind: TaxonomyKind,
+  input: TaxonomyInput,
+  db: Database,
+): Promise<{ id: string; created: boolean }> {
+  assertPermission(actor, PERMISSIONS.productsWrite)
+  const table = taxonomyTable[kind]
+  const entity = taxonomyEntity[kind]
+  const audit = createPostgresAuditRepository(db)
+  const slug = input.slug.trim()
+  if (!slug) throw new AppError('VALIDATION', `La ${kind === 'brand' ? 'marca' : 'colección'} necesita un slug`)
+
+  return db.transaction(async (tx) => {
+    const duplicate = await tx.select({ id: table.id }).from(table).where(eq(table.slug, slug)).limit(1)
+    if (duplicate.length > 0 && duplicate[0]!.id !== input.id) {
+      throw new AppError('CONFLICT', `Ya existe ${kind === 'brand' ? 'la marca' : 'la colección'} ${slug}`)
+    }
+
+    const values = {
+      slug,
+      name: input.name.trim(),
+      description: input.description ?? null,
+      position: input.position ?? 0,
+      status: input.status ?? 'draft',
+    }
+
+    if (input.id) {
+      const [current] = await tx.select().from(table).where(eq(table.id, input.id)).for('update')
+      if (!current) throw new AppError('NOT_FOUND', 'Registro inexistente')
+      await tx.update(table).set({ ...values, updatedAt: new Date() }).where(eq(table.id, input.id))
+      await audit.record({
+        actorId: actor!.userId,
+        actorKind: 'user',
+        action: `${kind}.update`,
+        entity,
+        entityId: input.id,
+        before: { slug: current.slug, name: current.name, status: current.status },
+        after: { slug: values.slug, name: values.name, status: values.status },
+      })
+      return { id: input.id, created: false }
+    }
+
+    const [created] = await tx.insert(table).values(values).returning({ id: table.id })
+    await audit.record({
+      actorId: actor!.userId,
+      actorKind: 'user',
+      action: `${kind}.create`,
+      entity,
+      entityId: created!.id,
+      before: null,
+      after: { slug: values.slug, name: values.name },
+    })
+    return { id: created!.id, created: true }
+  })
+}
+
+export function upsertAdminBrand(
+  actor: AdminActor | null,
+  input: TaxonomyInput,
+  db: Database = getDb(),
+): Promise<{ id: string; created: boolean }> {
+  return upsertTaxonomy(actor, 'brand', input, db)
+}
+
+export function upsertAdminCollection(
+  actor: AdminActor | null,
+  input: TaxonomyInput,
+  db: Database = getDb(),
+): Promise<{ id: string; created: boolean }> {
+  return upsertTaxonomy(actor, 'collection', input, db)
+}
+
+/**
+ * Reordena un listado (categorías, marcas o colecciones) en una sola
+ * transacción. El orden se normaliza a 0..n-1 para que la posición no dependa
+ * de lo que el cliente haya escrito a mano.
+ */
+export async function reorderAdminCatalog(
+  actor: AdminActor | null,
+  input: { kind: 'category' | TaxonomyKind; ids: readonly string[] },
+  db: Database = getDb(),
+): Promise<{ updated: number }> {
+  assertPermission(actor, PERMISSIONS.productsWrite)
+  const table = input.kind === 'category' ? categories : taxonomyTable[input.kind]
+  const entity =
+    input.kind === 'category' ? 'categories' : taxonomyEntity[input.kind as TaxonomyKind]
+  const audit = createPostgresAuditRepository(db)
+  const ids = [...new Set(input.ids)]
+  if (ids.length === 0) throw new AppError('VALIDATION', 'El orden no puede estar vacío')
+
+  return db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ id: table.id })
+      .from(table)
+      .where(inArray(table.id, ids))
+    if (existing.length !== ids.length) {
+      throw new AppError('NOT_FOUND', 'Alguno de los registros del orden no existe')
+    }
+
+    for (const [index, id] of ids.entries()) {
+      await tx.update(table).set({ position: index, updatedAt: new Date() }).where(eq(table.id, id))
+    }
+    await audit.record({
+      actorId: actor!.userId,
+      actorKind: 'user',
+      action: 'catalog.reorder',
+      entity,
+      entityId: null,
+      before: null,
+      after: { order: ids },
+    })
+    return { updated: ids.length }
   })
 }

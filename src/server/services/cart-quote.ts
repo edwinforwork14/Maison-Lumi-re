@@ -33,13 +33,24 @@ export interface ShippingOptionQuote {
   readonly free: boolean
 }
 
+export interface CouponQuote {
+  readonly code: string
+  readonly kind: 'percent' | 'fixed' | 'free_shipping'
+  /** Céntimos descontados del subtotal (`free_shipping` ⇒ 0). */
+  readonly discount: Money
+}
+
 export interface CartQuote {
   readonly lines: readonly QuoteLine[]
   readonly subtotal: Money
+  /** Descuento del cupón aplicado en servidor (Plan 03 §3). */
+  readonly discount: Money
   readonly shipping: Money
   readonly total: Money
   readonly freeShippingRemaining: Money
   readonly shippingOptions: readonly ShippingOptionQuote[]
+  /** Cupón validado que originó el descuento, si lo hubo. */
+  readonly coupon: CouponQuote | null
 }
 
 /**

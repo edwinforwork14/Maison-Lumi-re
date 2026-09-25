@@ -6,6 +6,7 @@ import {
   adminListInventory,
   type AdminInventoryRow,
 } from '@/features/admin/admin.api'
+import { queryKeys } from '@/features/model/queries'
 
 /** Inventario: estado por SKU y ajustes con motivo (el ledger es obligatorio). */
 export const Route = createFileRoute('/admin/inventory')({
@@ -41,6 +42,8 @@ function AdminInventoryPage() {
       setOpenVariant(null)
       void queryClient.invalidateQueries({ queryKey: ['admin', 'inventory'] })
       void queryClient.invalidateQueries({ queryKey: ['admin', 'kpis'] })
+      // El stock visible en la tienda cambia con el ajuste (Plan 02 §4).
+      void queryClient.invalidateQueries({ queryKey: queryKeys.products() })
     },
     onError: (error: Error) => setNotice(error.message),
   })

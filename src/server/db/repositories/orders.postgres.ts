@@ -14,11 +14,12 @@
  */
 
 import { createHash } from 'node:crypto'
-import { eq, sql } from 'drizzle-orm'
+import { and, count, eq, sql } from 'drizzle-orm'
 import { AppError } from '../../errors.ts'
 import { getDb, type Database } from '../client.ts'
 import { idempotencyKeys } from '../schema/ops.ts'
 import { orderItems, orders } from '../schema/orders.ts'
+import { couponRedemptions, coupons } from '../schema/promotions.ts'
 import { reserveWithinTx } from './inventory.postgres.ts'
 import { InsufficientStockError } from './inventory.port.ts'
 
@@ -53,6 +54,16 @@ export interface PlaceOrderInput {
   readonly shippingMethodId?: string
   readonly idempotencyKey: string
   readonly reservationTtlSeconds?: number
+  /**
+   * Cupón aplicado. Los límites (total y por cliente) se cuentan **aquí**,
+   * dentro de la transacción, y se inserta el canje en `coupon_redemptions`:
+   * un canje por pedido (invariante §5.10).
+   */
+  readonly coupon?: {
+    readonly id: string
+    readonly customerId?: string | null
+    readonly amountCents: number
+  }
 }
 
 export interface PlacedOrder {
@@ -133,6 +144,7 @@ export async function placeOrderTransactional(
           taxCents: input.totals.taxCents ?? 0,
           totalCents: input.totals.totalCents,
           shippingMethodId: input.shippingMethodId ?? null,
+          couponId: input.coupon?.id ?? null,
           idempotencyKey: input.idempotencyKey,
           placedAt: new Date(),
         })
@@ -160,6 +172,59 @@ export async function placeOrderTransactional(
         })),
         input.reservationTtlSeconds ?? DEFAULT_RESERVATION_TTL_SECONDS,
       )
+
+      // 4b) Cupón: se bloquea la fila y se cuentan los canjes **aquí**, dentro
+      //     de la misma transacción que crea el pedido. Dos checkouts que
+      //     usen el último cupón quedan serializados por el `FOR UPDATE`.
+      if (input.coupon) {
+        const [coupon] = await tx
+          .select()
+          .from(coupons)
+          .where(eq(coupons.id, input.coupon.id))
+          .for('update')
+        if (!coupon) {
+          throw new AppError('VALIDATION', 'El cupón indicado ya no existe')
+        }
+
+        const [totalRow] = await tx
+          .select({ n: count() })
+          .from(couponRedemptions)
+          .where(eq(couponRedemptions.couponId, coupon.id))
+        const totalRedemptions = Number(totalRow?.n ?? 0)
+
+        const usageConditions = [eq(couponRedemptions.couponId, coupon.id)]
+        if (input.coupon.customerId) {
+          usageConditions.push(eq(couponRedemptions.customerId, input.coupon.customerId))
+        } else {
+          usageConditions.push(eq(orders.email, input.email.trim().toLowerCase()))
+        }
+        const [customerRow] = await tx
+          .select({ n: count() })
+          .from(couponRedemptions)
+          .innerJoin(orders, eq(orders.id, couponRedemptions.orderId))
+          .where(and(...usageConditions))
+        const customerRedemptions = Number(customerRow?.n ?? 0)
+
+        if (coupon.maxUses !== null && totalRedemptions >= coupon.maxUses) {
+          throw new AppError('VALIDATION', `El cupón ${coupon.code} ya alcanzó su límite de usos`)
+        }
+        if (
+          coupon.maxUsesPerCustomer !== null &&
+          customerRedemptions >= coupon.maxUsesPerCustomer
+        ) {
+          throw new AppError(
+            'VALIDATION',
+            `El cupón ${coupon.code} ya lo ha usado este cliente el máximo permitido`,
+          )
+        }
+
+        await tx.insert(couponRedemptions).values({
+          couponId: coupon.id,
+          orderId: order!.id,
+          customerId: input.coupon.customerId ?? null,
+          amountCents: Math.max(0, input.coupon.amountCents),
+        })
+      }
 
       const placed: PlacedOrder = {
         orderId: order!.id,

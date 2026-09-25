@@ -19,6 +19,7 @@ import {
   add,
   money,
   multiply,
+  subtract,
   sum,
   type Money,
 } from '../../domain/money/money.ts'
@@ -30,14 +31,17 @@ import {
   type ShippingMethodId,
 } from '../../domain/pricing/rules.ts'
 import { getDb, type Database } from '../db/client.ts'
+import { isPostgresDataSource } from '../runtime/env.ts'
 import { inventoryItems } from '../db/schema/inventory.ts'
 import { orderItems, orders as ordersTable } from '../db/schema/orders.ts'
 import { productMedia, productVariants, products } from '../db/schema/catalog.ts'
+import { customers as customersTable, users as usersTable } from '../db/schema/identity.ts'
 import { shippingMethods as shippingMethodsTable } from '../db/schema/shipping.ts'
 import { siteSettings } from '../db/schema/content.ts'
 import { placeOrderTransactional } from '../db/repositories/orders.postgres.ts'
 import { AppError } from '../errors.ts'
 import type { CartQuote, QuoteLine, ShippingOptionQuote } from './cart-quote.ts'
+import { validateCouponForQuote, type ValidatedCoupon } from './promotions.ts'
 
 export interface StorefrontLine {
   readonly productId: string
@@ -95,8 +99,18 @@ function availabilityOf(stock: number): QuoteLine['availability'] {
  * Cotización autoritativa leída de la base. Devuelve la misma forma que la
  * cotización en memoria, así que la UI no cambia.
  */
+export interface QuoteCartInput {
+  readonly lines: readonly StorefrontLine[]
+  readonly shippingMethod?: ShippingMethodId
+  /** Código de descuento: se valida y aplica **solo** en el servidor. */
+  readonly couponCode?: string
+  /** Identidad para el límite «usos por cliente» del cupón. */
+  readonly customerId?: string | null
+  readonly email?: string
+}
+
 export async function quoteCartFromDb(
-  input: { lines: readonly StorefrontLine[]; shippingMethod?: ShippingMethodId },
+  input: QuoteCartInput,
   db: Database = getDb(),
 ): Promise<CartQuote> {
   const productIds = [...new Set(input.lines.map((line) => line.productId))]
@@ -178,26 +192,47 @@ export async function quoteCartFromDb(
   const subtotal = sum(lines.map((line) => line.lineTotal))
   const { methods } = await readShippingConfig(db)
 
+  // El cupón se valida contra el subtotal real antes de fijar el envío.
+  const validated: ValidatedCoupon | null = await validateCouponForQuote(
+    input.couponCode,
+    subtotal.amount,
+    { customerId: input.customerId, email: input.email },
+    db,
+  )
+  const discount = money(validated?.discountCents ?? 0, subtotal.currency)
+  const freeShippingCoupon = validated?.coupon.kind === 'free_shipping'
+
   const shippingOptions: ShippingOptionQuote[] = methods.map((method) => ({
     id: method.id,
     label: method.name,
     description: method.description,
-    price: shippingCostFor(methods, method.id, subtotal),
-    free: isFreeShipping(subtotal),
+    price: freeShippingCoupon
+      ? money(0, subtotal.currency)
+      : shippingCostFor(methods, method.id, subtotal),
+    free: freeShippingCoupon || isFreeShipping(subtotal),
   }))
 
   const method = input.shippingMethod ?? 'standard'
-  const shipping =
-    shippingOptions.find((option) => option.id === method)?.price ??
-    money(0, subtotal.currency)
+  const shipping = freeShippingCoupon
+    ? money(0, subtotal.currency)
+    : (shippingOptions.find((option) => option.id === method)?.price ??
+        money(0, subtotal.currency))
 
   return {
     lines,
     subtotal,
+    discount,
     shipping,
-    total: add(subtotal, shipping),
+    total: subtract(add(subtotal, shipping), discount),
     freeShippingRemaining: amountToFreeShipping(subtotal),
     shippingOptions,
+    coupon: validated
+      ? {
+          code: validated.coupon.code,
+          kind: validated.coupon.kind,
+          discount,
+        }
+      : null,
   }
 }
 
@@ -220,6 +255,8 @@ export interface PlaceStorefrontOrderInput {
   readonly userId?: string
   readonly lines: readonly StorefrontLine[]
   readonly shippingMethod?: ShippingMethodId
+  /** Código de descuento; se revalida aquí, en el servidor, antes de crear el pedido. */
+  readonly couponCode?: string
   readonly customer: {
     readonly firstName: string
     readonly lastName: string
@@ -254,8 +291,15 @@ export async function placeStorefrontOrder(
   input: PlaceStorefrontOrderInput,
   db: Database = getDb(),
 ): Promise<PlacedStorefrontOrder> {
+  const email = (input.userId ? input.email : input.customer.email).trim().toLowerCase()
+
   const quote = await quoteCartFromDb(
-    { lines: input.lines, shippingMethod: input.shippingMethod },
+    {
+      lines: input.lines,
+      shippingMethod: input.shippingMethod,
+      couponCode: input.couponCode,
+      email,
+    },
     db,
   )
   if (quote.lines.length === 0) {
@@ -272,7 +316,27 @@ export async function placeStorefrontOrder(
     )
   }
 
-  const email = (input.userId ? input.email : input.customer.email).trim().toLowerCase()
+  // Autoridad del cupón: se revalida aquí con el subtotal final y se resuelve
+  // el `customer_id` cuando el comprador tiene cuenta (para el límite por
+  // cliente). Los límites en sí se comprueban de nuevo dentro de la transacción.
+  const validated = await validateCouponForQuote(
+    input.couponCode,
+    quote.subtotal.amount,
+    { email },
+    db,
+  )
+  let couponId: string | undefined
+  let couponCustomerId: string | null = null
+  if (validated) {
+    couponId = validated.coupon.id
+    const [customerRow] = await db
+      .select({ id: customersTable.id })
+      .from(customersTable)
+      .innerJoin(usersTable, eq(usersTable.id, customersTable.userId))
+      .where(eq(usersTable.email, email))
+      .limit(1)
+    couponCustomerId = customerRow?.id ?? null
+  }
 
   const placed = await placeOrderTransactional(
     {
@@ -287,11 +351,19 @@ export async function placeStorefrontOrder(
       })),
       totals: {
         subtotalCents: quote.subtotal.amount,
+        discountCents: quote.discount.amount,
         shippingCents: quote.shipping.amount,
         taxCents: 0,
         totalCents: quote.total.amount,
       },
       shippingMethodId: await resolveShippingMethodId(input.shippingMethod, db),
+      coupon: couponId
+        ? {
+            id: couponId,
+            customerId: couponCustomerId,
+            amountCents: quote.discount.amount,
+          }
+        : undefined,
       idempotencyKey: input.idempotencyKey,
       reservationTtlSeconds: STOREFRONT_RESERVATION_TTL_SECONDS,
     },
@@ -437,8 +509,21 @@ export interface PublicSettings {
 }
 
 /** Ajustes que puede leer la tienda (nada de secretos: son valores públicos). */
-export async function readPublicSettings(db: Database = getDb()): Promise<PublicSettings> {
-  const rows = await db
+export async function readPublicSettings(db?: Database): Promise<PublicSettings> {
+  // Sin base de datos configurada (modo demo): los mismos valores por defecto
+  // que siembran `site_settings`. Así la cabecera, la ficha y el checkout no
+  // fallan por un ajuste que aún no puede leerse (D37).
+  if (!db && !isPostgresDataSource()) {
+    return {
+      currency: 'EUR',
+      locale: 'es-ES',
+      freeShippingThresholdCents: DEFAULT_FREE_SHIPPING_THRESHOLD_CENTS,
+      whatsappPhone: null,
+      whatsappName: null,
+    }
+  }
+  const database = db ?? getDb()
+  const rows = await database
     .select({ key: siteSettings.key, value: siteSettings.value, type: siteSettings.type })
     .from(siteSettings)
     .where(
