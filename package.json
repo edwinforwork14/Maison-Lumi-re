@@ -17,7 +17,8 @@
     "db:seed": "node --experimental-strip-types scripts/db-seed.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:reset-stock": "node --experimental-strip-types --env-file-if-exists=.env scripts/db-reset-stock.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.2",

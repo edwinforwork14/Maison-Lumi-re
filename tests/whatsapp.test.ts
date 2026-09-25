@@ -6,7 +6,7 @@ import {
   normalizeWhatsAppPhone,
 } from '../src/lib/whatsapp.ts'
 import { money, add, multiply } from '../src/domain/money/money.ts'
-import type { CartQuote } from '../src/server/services/commerce.ts'
+import type { CartQuote } from '../src/server/services/cart-quote.ts'
 
 /**
  * El pedido se cierra por WhatsApp (la tienda no cobra en línea), así que el

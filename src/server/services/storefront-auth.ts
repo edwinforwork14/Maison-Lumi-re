@@ -31,6 +31,13 @@ export interface StorefrontUser {
   readonly email: string
 }
 
+/** Identidad que consume la UI (sin el id interno). */
+export interface SessionUser {
+  readonly firstName: string
+  readonly lastName: string
+  readonly email: string
+}
+
 export interface StorefrontAuthContext {
   readonly ip?: string | null
 }

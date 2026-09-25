@@ -10,21 +10,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { getCookie, getRequest, setCookie } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { catalogRepository } from '@/server/seed/catalog'
-import {
-  placeOrder as placeOrderService,
-  quoteCart as quoteCartService,
-  type CartQuote,
-  type ServerOrder,
-} from '@/server/services/commerce'
-import {
-  createSessionCookie,
-  destroySession,
-  getSessionUser,
-  requireSessionUser,
-  login as loginService,
-  register as registerService,
-  type SessionUser,
-} from '@/server/session/store'
+import type { CartQuote } from '@/server/services/cart-quote'
+import type { SessionUser } from '@/server/services/storefront-auth'
 import { AppError } from '@/server/errors'
 import { isPostgresDataSource } from '@/server/runtime/env'
 import type { CatalogFilters, SortId } from '@/domain/catalog'
@@ -174,11 +161,8 @@ export const listRelatedProducts = createServerFn({ method: 'GET' })
 export const quoteCart = createServerFn({ method: 'POST' })
   .validator(quoteInputSchema)
   .handler(async ({ data }): Promise<CartQuote> => {
-    if (isPostgresDataSource()) {
-      const { quoteCartFromDb } = await import('@/server/services/storefront-orders')
-      return quoteCartFromDb(data)
-    }
-    return quoteCartService(data)
+    const { quoteCartFromDb } = await import('@/server/services/storefront-orders')
+    return quoteCartFromDb(data)
   })
 
 export const placeOrder = createServerFn({ method: 'POST' })
@@ -186,28 +170,20 @@ export const placeOrder = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<{ orderNumber: string; total: Money }> => {
     // Si hay sesión, el pedido se registra a nombre de esa cuenta: el email del
     // formulario no puede suplantar a otro cliente.
-    const sessionUser = getSessionUser()
+    const sessionUser = await currentStorefrontUser()
     const customer = { ...data.customer, email: sessionUser?.email ?? data.customer.email }
 
-    if (isPostgresDataSource()) {
-      // Camino real: transacción con reserva de stock y compromiso del pago
-      // simulado. Es lo que hace que una venta descuente existencias (D25).
-      const { placeStorefrontOrder } = await import('@/server/services/storefront-orders')
-      const placed = await placeStorefrontOrder({
-        email: customer.email,
-        lines: data.lines,
-        shippingMethod: data.shippingMethod,
-        customer,
-        idempotencyKey: data.idempotencyKey,
-      })
-      return { orderNumber: placed.orderNumber, total: placed.total }
-    }
-
-    const order = placeOrderService({
-      ...data,
+    // Transacción con reserva de stock: es lo que hace que vender bloquee
+    // existencias (D25). No hay camino alternativo en memoria.
+    const { placeStorefrontOrder } = await import('@/server/services/storefront-orders')
+    const placed = await placeStorefrontOrder({
+      email: customer.email,
+      lines: data.lines,
+      shippingMethod: data.shippingMethod,
       customer,
+      idempotencyKey: data.idempotencyKey,
     })
-    return { orderNumber: order.number, total: order.totals.total }
+    return { orderNumber: placed.orderNumber, total: placed.total }
   })
 
 /**
@@ -220,12 +196,8 @@ export const placeOrder = createServerFn({ method: 'POST' })
 export const listMyOrders = createServerFn({ method: 'GET' }).handler(async () => {
   const user = await currentStorefrontUser()
   if (!user) throw new AppError('UNAUTHENTICATED', 'Sesión requerida')
-  if (isPostgresDataSource()) {
-    const { listStorefrontOrders } = await import('@/server/services/storefront-orders')
-    return listStorefrontOrders(user.email)
-  }
-  const { listOrdersByCustomer } = await import('@/server/services/commerce')
-  return listOrdersByCustomer(user.email)
+  const { listStorefrontOrders } = await import('@/server/services/storefront-orders')
+  return listStorefrontOrders(user.email)
 })
 
 /**
@@ -238,24 +210,15 @@ export const listMyOrders = createServerFn({ method: 'GET' }).handler(async () =
  */
 export const getOrder = createServerFn({ method: 'GET' })
   .validator(z.object({ orderNumber: z.string().min(8).max(40) }))
-  .handler(async ({ data }): Promise<ServerOrder | null> => {
+  .handler(async ({ data }) => {
     const user = await currentStorefrontUser()
     if (!user) throw new AppError('UNAUTHENTICATED', 'Sesión requerida')
 
-    if (isPostgresDataSource()) {
-      // La propiedad se comprueba en la propia consulta: si el email no
-      // coincide no hay fila, así que no se distingue «no existe» de «no es tuyo».
-      const { findStorefrontOrderForOwner } = await import('@/server/services/storefront-orders')
-      const order = await findStorefrontOrderForOwner(data.orderNumber, user.email)
-      if (!order) throw new AppError('NOT_FOUND', 'Pedido no encontrado')
-      return order as unknown as ServerOrder
-    }
-
-    const { findOrderByNumber, ownsOrder } = await import('@/server/services/commerce')
-    const order = findOrderByNumber(data.orderNumber)
-    if (!order || !ownsOrder(order, user.email)) {
-      throw new AppError('NOT_FOUND', 'Pedido no encontrado')
-    }
+    // La propiedad se comprueba en la propia consulta: si el email no coincide no
+    // hay fila, así que no se distingue «no existe» de «no es tuyo» (D32).
+    const { findStorefrontOrderForOwner } = await import('@/server/services/storefront-orders')
+    const order = await findStorefrontOrderForOwner(data.orderNumber, user.email)
+    if (!order) throw new AppError('NOT_FOUND', 'Pedido no encontrado')
     return order
   })
 
@@ -298,13 +261,11 @@ async function issueStorefrontSession(userId: string): Promise<void> {
 /**
  * Usuario de la sesión actual, resuelto en el servidor.
  *
- * Con PostgreSQL la identidad vive en `users` + `customers` y la sesión en la
- * tabla `sessions` (cookie firmada); sin base se mantiene el almacén en memoria
- * como respaldo para entornos sin base de datos.
+ * La identidad vive en `users` + `customers` y la sesión en la tabla `sessions`
+ * (cookie firmada). No hay camino en memoria: el almacén que guardaba las
+ * contraseñas en base64 se eliminó para que no pueda usarse por accidente.
  */
 async function currentStorefrontUser(): Promise<SessionUser | null> {
-  if (!isPostgresDataSource()) return getSessionUser()
-
   const { createPostgresSessionsRepository, resolveSessionSecret } = await import(
     '@/server/db/repositories/sessions.postgres'
   )
@@ -318,7 +279,6 @@ async function currentStorefrontUser(): Promise<SessionUser | null> {
   return { firstName: account.firstName, lastName: account.lastName, email: account.email }
 }
 
-
 export const getSession = createServerFn({ method: 'GET' }).handler(
   async (): Promise<{ user: SessionUser | null }> => {
     return { user: await currentStorefrontUser() }
@@ -328,55 +288,37 @@ export const getSession = createServerFn({ method: 'GET' }).handler(
 export const loginFn = createServerFn({ method: 'POST' })
   .validator(credentialsSchema)
   .handler(async ({ data }): Promise<SessionUser> => {
-    if (isPostgresDataSource()) {
-      const { createPostgresStorefrontAuth } = await import('@/server/services/storefront-auth')
-      const account = await createPostgresStorefrontAuth().login({
-        email: data.email,
-        password: data.password,
-        context: { ip: storefrontIp() },
-      })
-      await issueStorefrontSession(account.id)
-      return { firstName: account.firstName, lastName: account.lastName, email: account.email }
-    }
-    const user = loginService(data.email, data.password)
-    createSessionCookie(user)
-    return user
+    const { createPostgresStorefrontAuth } = await import('@/server/services/storefront-auth')
+    const account = await createPostgresStorefrontAuth().login({
+      email: data.email,
+      password: data.password,
+      context: { ip: storefrontIp() },
+    })
+    await issueStorefrontSession(account.id)
+    return { firstName: account.firstName, lastName: account.lastName, email: account.email }
   })
 
 export const registerFn = createServerFn({ method: 'POST' })
   .validator(registerSchema)
   .handler(async ({ data }): Promise<SessionUser> => {
-    if (isPostgresDataSource()) {
-      const { createPostgresStorefrontAuth } = await import('@/server/services/storefront-auth')
-      const account = await createPostgresStorefrontAuth().register({
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        password: data.password,
-      })
-      await issueStorefrontSession(account.id)
-      return { firstName: account.firstName, lastName: account.lastName, email: account.email }
-    }
-    const user = registerService({
+    const { createPostgresStorefrontAuth } = await import('@/server/services/storefront-auth')
+    const account = await createPostgresStorefrontAuth().register({
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email,
       password: data.password,
     })
-    createSessionCookie(user)
-    return user
+    await issueStorefrontSession(account.id)
+    return { firstName: account.firstName, lastName: account.lastName, email: account.email }
   })
 
 export const logoutFn = createServerFn({ method: 'POST' }).handler(async () => {
-  if (isPostgresDataSource()) {
-    const { createPostgresSessionsRepository, resolveSessionSecret } = await import(
-      '@/server/db/repositories/sessions.postgres'
-    )
-    const sessions = createPostgresSessionsRepository(undefined, resolveSessionSecret())
-    await sessions.revoke(getCookie(STOREFRONT_COOKIE))
-    setCookie(STOREFRONT_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 })
-  }
-  destroySession()
+  const { createPostgresSessionsRepository, resolveSessionSecret } = await import(
+    '@/server/db/repositories/sessions.postgres'
+  )
+  const sessions = createPostgresSessionsRepository(undefined, resolveSessionSecret())
+  await sessions.revoke(getCookie(STOREFRONT_COOKIE))
+  setCookie(STOREFRONT_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 })
   return { ok: true }
 })
 
@@ -389,7 +331,7 @@ export type { SortId }
  * El cliente nunca importa `@/server/**`: consume estos tipos a través de la
  * superficie pública que es este archivo.
  */
-export type { CartQuote, QuoteLine, ShippingOptionQuote } from '@/server/services/commerce'
+export type { CartQuote, QuoteLine, ShippingOptionQuote } from '@/server/services/cart-quote'
 
 // ─── Ajustes del sitio que consume la tienda ────────────────────────────────
 

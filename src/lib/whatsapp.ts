@@ -9,7 +9,7 @@
  * formato del texto es lo único que el cliente ve de este flujo.
  */
 
-import type { CartQuote } from '@/server/services/commerce'
+import type { CartQuote } from '@/server/services/cart-quote'
 
 /** Cuenta de WhatsApp de la tienda, en formato internacional sin signos. */
 export interface WhatsAppContact {

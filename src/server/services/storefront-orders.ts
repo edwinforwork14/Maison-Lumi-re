@@ -37,7 +37,7 @@ import { shippingMethods as shippingMethodsTable } from '../db/schema/shipping.t
 import { siteSettings } from '../db/schema/content.ts'
 import { placeOrderTransactional } from '../db/repositories/orders.postgres.ts'
 import { AppError } from '../errors.ts'
-import type { CartQuote, QuoteLine, ShippingOptionQuote } from './commerce.ts'
+import type { CartQuote, QuoteLine, ShippingOptionQuote } from './cart-quote.ts'
 
 export interface StorefrontLine {
   readonly productId: string
