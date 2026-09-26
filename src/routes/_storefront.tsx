@@ -3,6 +3,7 @@ import { StoreProvider } from '@/lib/store'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { CartDrawer } from '@/components/cart/CartDrawer'
+import { Preloader } from '@/components/layout/Preloader'
 import { QuickViewProvider } from '@/features/quick-view/quick-view'
 import { listCategories, listCollections } from '@/features/commerce.api'
 
@@ -45,6 +46,14 @@ function StorefrontLayout() {
           <Footer categories={navigation.categories} />
         </div>
         <CartDrawer />
+        {/* Pantalla de carga (Plan 05 §6.5): hermano del layout dentro de
+            StoreProvider. Al ser el layout pathless no se remonta al navegar
+            entre rutas: sólo aparece en cada carga completa. El `<noscript>`
+            lo oculta sin JS (§6.4). */}
+        <Preloader />
+        <noscript>
+          <style>{'#preloader{display:none!important}'}</style>
+        </noscript>
       </QuickViewProvider>
     </StoreProvider>
   )

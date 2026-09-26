@@ -43,6 +43,20 @@
   /* ─── Motion (§1.3) ───────────────────────────────────────────────────── */
   --ease-chloe: cubic-bezier(0.23, 1, 0.32, 1);
 
+  /* ─── Motion (Plan 05 §2.1): duraciones por token ─────────────────────── */
+  --duration-fast: 150ms; /* cambios de color, hover de texto */
+  --duration-base: 320ms; /* fundidos de overlay/backdrop, paneles */
+  --duration-reveal: 450ms; /* cortina blanca de la cabecera */
+  --duration-slow: 520ms; /* ripple del botón */
+  --duration-dissolve: 3200ms; /* apertura del fondo blanco (más lenta para apreciar el recorrido) */
+
+  /* Alto del chrome (anuncio + cabecera), medido en cliente con
+     ResizeObserver (use-chrome-height); valor SSR por defecto. */
+  --chrome-h: 5.5rem;
+
+  /* Superficie del preloader (Plan 05 S1): negro de marca, logo blanco. */
+  --color-preloader: var(--color-strong);
+
   /* ─── Alias de la piel anterior (COMATIBILIDAD, no transición) ──────────
      El panel admin (fuera del alcance visual del Plan 04, §0.3) sigue
      usando estas clases en 15 rutas; eliminarlas dejaría el panel sin color.
@@ -61,6 +75,13 @@
   /* Entrada lateral de la columna 2 del mega dropdown (brief §3). */
   --animate-mega-in: mega-in 0.22s var(--ease-chloe) both;
 
+  /* Plan 05 §2.2: animaciones de una sola vez (los estados interrumpibles
+     usan `transition`, no keyframes). */
+  /* Plan 05 §2.2: los keyframes de motion nuevo viven FUERA de @theme
+     (más abajo): Tailwind v4 sólo emite los @keyframes internos cuando una
+     utilidad `animate-*` aparece en el código fuente, y éstos se usan desde
+     CSS propio con `var()`. */
+
   @keyframes fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -77,6 +98,46 @@
     from { opacity: 0; transform: translateX(-8px); }
     to { opacity: 1; transform: translateX(0); }
   }
+}
+
+/* ─── Plan 05 §2.2: keyframes a nivel raíz ─────────────────────────────────
+   FUERA de `@theme` para que se emitan SIEMPRE (Tailwind v4 descarta los
+   @keyframes internos si ninguna utilidad `animate-*` los usa, y éstos se
+   referencian desde CSS propio). Los estados interrumpibles usan
+   `transition`; éstas son animaciones de una sola vez o en bucle. */
+@keyframes content-stagger {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loader-logo-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Salida: cada mitad se desliza hacia su lado disolviéndose. */
+@keyframes loader-panel-out {
+  from { transform: translateX(0); opacity: 1; filter: blur(0); }
+  to { transform: translateX(var(--loader-exit, -100%)); opacity: 0; filter: blur(8px); }
+}
+
+@keyframes loader-logo-out {
+  from { transform: translateX(0); opacity: 1; filter: blur(0); }
+  to { transform: translateX(var(--loader-exit, -60%)); opacity: 0; filter: blur(6px); }
+}
+
+/* Curva de apertura del fondo blanco: arranque aún más suave y cierre
+   progresivo — la separación de las mitades se percibe lenta y continua. */
+@keyframes loader-panel-out {
+  from { transform: translateX(0); opacity: 1; filter: blur(0); }
+  to { transform: translateX(var(--loader-exit, -100%)); opacity: 0; filter: blur(8px); }
+}
+
+/* Curva de salida del preloader: arranque suave y llegada larga (se
+   aprecia el recorrido completo sin golpe seco al empezar). */
+@keyframes progress-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(400%); }
 }
 
 /* Variante de navegación: abre el panel por hover Y foco (corrige D1). */
@@ -128,15 +189,57 @@
 
 /* ─── Botones (§1.5): una sola matriz, 48 px de alto, radio 4 px ─────────── */
 @utility btn {
-  @apply inline-flex items-center justify-center gap-3 rounded-[4px] px-5 py-3 min-h-12 text-[13px] leading-[1.3846] uppercase tracking-[0.2em] transition-colors duration-300;
+  @apply relative isolate inline-flex items-center justify-center gap-3 overflow-hidden rounded-[4px] px-5 py-3 min-h-12 text-[13px] leading-[1.3846] uppercase tracking-[0.2em] transition-colors duration-300;
+
+  /* Onda de hover (Plan 05 §5.1): disco absoluto que se expande desde el
+     centro. El color lo fija cada variante con `--wave-color`; el fallback
+     es la tinta al 8 %. Por ser absoluto no participa del flex ni altera
+     el `gap-3`. Convive con los `hover:bg-*` de las variantes. */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--wave-color, rgb(10 10 10 / 0.08));
+    border-radius: inherit;
+    opacity: 0;
+    transform: scale(0.2);
+    transition:
+      transform var(--duration-base) var(--ease-chloe),
+      opacity var(--duration-base) var(--ease-chloe);
+    pointer-events: none;
+  }
+
+  &:hover::before,
+  &:focus-visible::before {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Contenedor del ripple en controles que no usan `.btn` (stepper, iconos). */
+@utility ripple-host {
+  @apply relative isolate overflow-hidden;
+}
+
+/* Contenido escalonado del overlay (Plan 05 §4.1): retardo por `--i`. */
+@utility stagger-item {
+  animation: content-stagger 0.4s var(--ease-chloe) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
 }
 
 @utility btn-outline {
   @apply border border-strong text-strong bg-surface hover:bg-strong hover:text-surface disabled:border-line-light disabled:text-text-secondary disabled:cursor-not-allowed;
+
+  /* La onda hereda el fondo oscuro del hover: sobre negro, la onda es
+     blanca translúcida. */
+  --wave-color: rgb(255 255 255 / 0.25);
 }
 
 @utility btn-solid {
   @apply bg-frost-inverse text-white shadow-frost hover:bg-black;
+
+  --wave-color: rgb(255 255 255 / 0.25);
 }
 
 @utility btn-frost {
@@ -185,11 +288,16 @@ body {
   outline-offset: 2px;
 }
 
-/* Accesibilidad: respetar la preferencia de movimiento reducido. */
+/* Accesibilidad: respetar la preferencia de movimiento reducido.
+
+   Decisión del usuario (Plan 05): el preloader se EXIME — su secuencia es
+   la identidad de carga de la marca y se anima siempre. Por eso el
+   selector global excluye `#preloader` y su subtree: un `unset` posterior
+   no serviría (`animation-duration: unset` computa a `0s`). */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *:not(#preloader, #preloader *),
+  *:not(#preloader, #preloader *)::before,
+  *:not(#preloader, #preloader *)::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -203,4 +311,161 @@ body {
 }
 .skip-link:focus {
   transform: translateY(0);
+}
+
+/* ─── Plan 05 §3.2: cortina de la cabecera ─────────────────────────────────
+   Capa blanca absoluta tras el contenido; baja como una cortina al hacer
+   scroll. Sólo se animan `transform` y `opacity`. */
+.header-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-frost);
+  backdrop-filter: blur(var(--blur-frost));
+  opacity: 0;
+  transform: translateY(-100%);
+  transition:
+    transform var(--duration-reveal) var(--ease-chloe),
+    opacity var(--duration-reveal) var(--ease-chloe);
+  pointer-events: none;
+}
+
+[data-header-state='scrolled'] .header-surface {
+  opacity: 1;
+  transform: translateY(0);
+  will-change: transform;
+}
+
+/* Variante transparente del anuncio mientras la cabecera está en el top.
+   El anuncio es hermano del <header> (no hijo), así que el estado viaja
+   como atributo propio. */
+[data-chrome='announcement'][data-header-state='top'] {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+
+/* ─── Plan 05 §5.2: disco del ripple de click (WAAPI) ─────────────────────── */
+.ripple-wave {
+  position: absolute;
+  border-radius: 9999px;
+  background: var(--wave-color, rgb(10 10 10 / 0.15));
+  transform: scale(0);
+  pointer-events: none;
+}
+
+/* ─── Plan 05 §6: preloader ────────────────────────────────────────────
+   Superficie BLANCA (decisión del usuario; ajustable con
+   --color-preloader) con logo oscuro. Dos mitades verticales: al
+   terminar, se separan hacia los lados deslizando (translateX ∓100%)
+   mientras se disuelven, y el logo duplicado con recorte sale partido
+   hacia cada lado. */
+#preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.preloader-half-left,
+.preloader-half-right {
+  position: absolute;
+  inset-block: 0;
+  width: 50%;
+  background: var(--color-surface);
+}
+
+.preloader-half-left {
+  left: 0;
+  --loader-exit: -100%;
+}
+
+.preloader-half-right {
+  right: 0;
+  --loader-exit: 100%;
+}
+
+/* Al salir, el contenedor deja de ser opaco: lo que se revela tras las
+   mitades es la página, no otra superficie. La barra de progreso se
+   funde en lugar de desaparecer de golpe. */
+#preloader.preloader-exiting {
+  background: transparent;
+  pointer-events: none;
+}
+
+.preloader-exiting .preloader-progress {
+  opacity: 0;
+  transition: opacity 0.4s var(--ease-chloe);
+}
+
+/* will-change sólo durante la salida: transform/opacity/filter por GPU,
+   sin tirones. */
+.preloader-exiting .preloader-half-left,
+.preloader-exiting .preloader-half-right,
+.preloader-exiting .preloader-logo-half-left,
+.preloader-exiting .preloader-logo-half-right {
+  will-change: transform, opacity, filter;
+}
+
+/* El logo ocupa TODO el overlay: cada mitad replica el logo centrado en
+   pantalla y lo recorta a su lado — así la mitad izquierda del logo sale
+   hacia la izquierda y la derecha hacia la derecha, sin costuras. */
+.preloader-logo {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  animation: loader-logo-in 0.6s var(--ease-chloe) both;
+}
+
+.preloader-logo-half-left,
+.preloader-logo-half-right {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  --loader-exit: -60%;
+}
+
+.preloader-logo-half-left {
+  left: 0;
+  clip-path: inset(0 50% 0 0);
+}
+
+.preloader-logo-half-right {
+  right: 0;
+  clip-path: inset(0 0 0 50%);
+  --loader-exit: 60%;
+}
+
+.preloader-exiting .preloader-logo-half-left,
+.preloader-exiting .preloader-logo-half-right {
+  /* El logo sale DESPUÉS de que las mitades empezaron a abrirse: se ve
+     cómo la pantalla se parte y el logo escapa hacia los lados. */
+  animation: loader-logo-out 1.8s var(--ease-chloe) 0.7s both;
+}
+
+.preloader-exiting .preloader-half-left,
+.preloader-exiting .preloader-half-right {
+  animation: loader-panel-out var(--duration-dissolve) var(--ease-chloe) both;
+}
+
+.preloader-progress {
+  position: absolute;
+  bottom: 3rem;
+  left: 50%;
+  width: 8rem;
+  height: 1px;
+  overflow: hidden;
+  transform: translateX(-50%);
+  background: rgb(10 10 10 / 0.12);
+}
+
+.preloader-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 25%;
+  background: var(--color-strong);
+  animation: progress-slide 1.4s ease-in-out infinite;
 }

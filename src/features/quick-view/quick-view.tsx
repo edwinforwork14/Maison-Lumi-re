@@ -45,6 +45,8 @@ const HISTORY_FLAG = 'ml-quick-view'
 
 export function QuickViewProvider({ children }: { children?: ReactNode }) {
   const [activeSlug, setActiveSlug] = useState<string | null>(null)
+  /** Plan 05 §4.4 (S7): el nodo sobrevive al cierre para animar la salida. */
+  const [renderWhileClosing, setRenderWhileClosing] = useState(false)
   const queryClient = useQueryClient()
   /** Scroll de la página de fondo, guardado al abrir y devuelto al cerrar. */
   const scrollRef = useRef(0)
@@ -56,8 +58,10 @@ export function QuickViewProvider({ children }: { children?: ReactNode }) {
    */
   const close = useCallback(() => {
     if (history.state?.[HISTORY_FLAG]) {
+      setRenderWhileClosing(true)
       history.back()
     } else {
+      setRenderWhileClosing(true)
       setActiveSlug(null)
     }
   }, [])
@@ -69,6 +73,16 @@ export function QuickViewProvider({ children }: { children?: ReactNode }) {
       history.pushState({ [HISTORY_FLAG]: true }, '')
     }
   }, [])
+
+  // Plan 05 §4.4: mientras la animación de cierre está en curso (320 ms)
+  // el nodo sigue montado con la clase de salida; pasado el plazo se retira.
+  useEffect(() => {
+    if (activeSlug === null && renderWhileClosing) {
+      const timer = window.setTimeout(() => setRenderWhileClosing(false), 400)
+      return () => window.clearTimeout(timer)
+    }
+    if (activeSlug !== null) setRenderWhileClosing(true)
+  }, [activeSlug, renderWhileClosing])
 
   // Botón atrás del navegador y `history.back()` de `close`: cierran el
   // overlay y restauran el scroll de la página de fondo (§2/§4).
@@ -113,7 +127,10 @@ export function QuickViewProvider({ children }: { children?: ReactNode }) {
 
   // Escape cierra (§14/§15): el overlay no usa `useDialog` (la trampa de
   // foco rompería la interacción con el drawer del carrito que se abre
-  // encima), así que escucha su propio Escape.
+  // encima), así que escucha su propio Escape. En fase de captura: si el
+  // panel de detalles anidado ya manejó Escape (stopPropagation en captura),
+  // este listener no llega a ejecutarse — cierra primero el panel y después
+  // el quick-view (Plan 05 §4.4/§9.3).
   useEffect(() => {
     if (activeSlug === null) return
     const onKey = (e: KeyboardEvent) => {
@@ -161,11 +178,20 @@ export function QuickViewProvider({ children }: { children?: ReactNode }) {
     <QuickViewContext.Provider value={value}>
       {children}
 
-      {activeSlug !== null && (
+      {(activeSlug !== null || renderWhileClosing) && (
         <div
-          className="fixed inset-0 z-50 overflow-y-auto bg-surface animate-fade-in"
+          /* Plan 05 §4.4 (S7): entrada = subida + fundido; salida = la misma
+             transición invertida. `aria-hidden` durante la salida: sin foco
+             accesible en un overlay que ya está cerrado. */
+          aria-hidden={activeSlug === null}
+          inert={activeSlug === null}
+          className={`fixed inset-0 z-50 overflow-y-auto bg-surface transition-[opacity,transform] duration-[320ms] ease-[cubic-bezier(.23,1,.32,1)] ${
+            activeSlug !== null
+              ? 'translate-y-0 opacity-100'
+              : 'pointer-events-none translate-y-2 opacity-0'
+          }`}
           role="dialog"
-          aria-modal="true"
+          aria-modal={activeSlug !== null}
           aria-label={product ? product.name : 'Producto'}
         >
           {/* Barra opaca: la imagen no se transparenta nunca bajo la ✕. */}
@@ -188,7 +214,7 @@ export function QuickViewProvider({ children }: { children?: ReactNode }) {
             <div className="mx-auto max-w-2xl px-4 py-32 text-center">
               <p className="mb-3 label-wide tracking-[0.3em] text-text-secondary">Error</p>
               <h2 className="mb-4 editorial-title">No hemos podido cargar la pieza</h2>
-              <button type="button" onClick={() => void queryClient.invalidateQueries({ queryKey: queryKeys.product(activeSlug) })} className="btn btn-outline px-8 py-3">
+              <button type="button" onClick={() => activeSlug !== null && void queryClient.invalidateQueries({ queryKey: queryKeys.product(activeSlug) })} className="btn btn-outline px-8 py-3">
                 Reintentar
               </button>
             </div>
@@ -210,6 +236,7 @@ export function QuickViewProvider({ children }: { children?: ReactNode }) {
                 product={product}
                 categories={categories}
                 onNavigate={close}
+                nested
               />
             </div>
           )}

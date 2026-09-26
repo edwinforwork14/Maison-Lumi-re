@@ -4,13 +4,22 @@ import { getSiteSettings } from '@/features/commerce.api'
 import { queryKeys } from '@/features/model/queries'
 import { formatCents } from '@/lib/money-format'
 import { Icon } from '@/components/ui/Icon'
+import type { HeaderState } from '@/lib/scroll-state'
 
 /**
  * Franja de anuncios (Plan 04 §2.0): mensajes en rotación con fundido
  * y botón de cierre. El umbral de envío sale de `site_settings` (defecto
  * D37): la franja no hardcodea importes.
+ *
+ * Plan 05 §3.3: mientras la cabecera está en `top` la franja es transparente
+ * (se mezcla con el hero); `data-chrome` permite medir el chrome completo.
  */
-export function AnnouncementBar() {
+export function AnnouncementBar({
+  headerState = 'scrolled',
+}: {
+  /** Estado de la cabecera: en `top` la franja pierde fondo y borde. */
+  readonly headerState?: HeaderState
+}) {
   const [closed, setClosed] = useState(false)
   const [index, setIndex] = useState(0)
 
@@ -42,8 +51,10 @@ export function AnnouncementBar() {
 
   return (
     <div
+      data-chrome="announcement"
+      data-header-state={headerState}
       data-animation="fade-in"
-      className="relative border-b border-line bg-surface px-12 py-2 text-center"
+      className="relative border-b border-line bg-surface px-12 py-2 text-center transition-colors"
     >
       {/* `key` reinicia la animación de fundido en cada rotación. */}
       <p key={index} className="body-text animate-fade-in text-text-secondary">

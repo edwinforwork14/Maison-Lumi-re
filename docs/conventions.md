@@ -6,7 +6,7 @@
 2. **El servidor decide, el cliente pinta.** Precios, stock y totales provienen de `quoteCart`/server functions; nunca se calculan en el navegador.
 3. **Toda frontera se valida con Zod** (search params, formularios, server functions).
 4. **Una feature, una API pública.** El import cruzado entra por `index.ts`.
-5. **Sin literales de estilo repetidos**: use las `@utility` de `src/styles.css` (`eyebrow`, `btn`, `btn-outline`, `field`, `skeleton`).
+5. **Sin literales de estilo repetidos**: use las `@utility` de `src/styles.css` (`eyebrow`, `btn`, `btn-outline`, `field`, `skeleton`). Plan 05 añade: `ripple-host` (contenedor del ripple en controles que no usan `.btn`) y `stagger-item` (entrada escalonada con retardo por `--i`). La onda de hover ya vive dentro de `.btn`; el color por variante se fija con `--wave-color`.
 6. **Prohibido `any`, `as never` y enlaces sin tipos** (`ButtonLink` con `to` tipado; nunca `to="/x?query=..."`).
 
 ## Estructura

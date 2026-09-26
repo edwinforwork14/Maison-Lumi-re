@@ -1,3 +1,5 @@
+import { useRipple } from '@/hooks/use-ripple'
+
 interface QuantitySelectorProps {
   value: number
   onChange: (value: number) => void
@@ -17,14 +19,20 @@ export function QuantitySelector({
   min = 1,
   max = 10,
 }: QuantitySelectorProps) {
+  // Onda expansiva en los controles del stepper (Plan 05 §5.3): host con
+  // `ripple-host` porque estos botones no usan `.btn`.
+  const { onPointerDown, onKeyDown } = useRipple()
+  const rippleProps = { onPointerDown, onKeyDown } as const
+
   return (
     <div className="inline-flex h-12 items-center border border-line bg-surface">
       <button
         type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
         disabled={value <= min}
-        className="w-12 self-stretch text-text-secondary transition-colors hover:text-strong disabled:cursor-not-allowed disabled:text-line-light"
+        className="ripple-host w-12 self-stretch text-text-secondary transition-colors hover:text-strong disabled:cursor-not-allowed disabled:text-line-light"
         aria-label="Disminuir cantidad"
+        {...rippleProps}
       >
         −
       </button>
@@ -39,8 +47,9 @@ export function QuantitySelector({
         type="button"
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={value >= max}
-        className="w-12 self-stretch text-text-secondary transition-colors hover:text-strong disabled:cursor-not-allowed disabled:text-line-light"
+        className="ripple-host w-12 self-stretch text-text-secondary transition-colors hover:text-strong disabled:cursor-not-allowed disabled:text-line-light"
         aria-label="Aumentar cantidad"
+        {...rippleProps}
       >
         +
       </button>

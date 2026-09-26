@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useStore } from '@/lib/store'
 import { Icon } from '@/components/ui/Icon'
+import { useScrollState } from '@/hooks/use-scroll-state'
+import { useChromeHeight } from '@/hooks/use-chrome-height'
 import { AnnouncementBar } from './AnnouncementBar'
 import { MenuModal } from './MenuModal'
 import { MegaDropdown } from './MegaDropdown'
@@ -29,18 +31,28 @@ export function Header({ categories, collections }: HeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const mega = useMegaMenu()
 
+  // Plan 05 §3: transparente en el top, cortina blanca al hacer scroll. El
+  // mega abierto fuerza el estado opaco. La medición del chrome (anuncio +
+  // cabecera → `--chrome-h`) se monta aquí, una sola vez.
+  const scrollState = useScrollState(mega.state.isOpen)
+  useChromeHeight()
+
   return (
     <>
-      <AnnouncementBar />
+      <AnnouncementBar headerState={scrollState} />
       <header
+        data-header-state={scrollState}
         /* El cierre sólo se programa al salir del header completo: el panel
            es hijo suyo (top-full), así que recorrer botón → header → panel
            nunca dispara `scheduleClose` (brief §15/§19). */
         onMouseEnter={mega.cancelClose}
         onMouseLeave={mega.scheduleClose}
-        className="sticky top-0 z-40 border-b border-line bg-frost backdrop-blur-[10px]"
+        className="sticky top-0 z-40"
       >
-        <div className="grid min-h-[3.375rem] grid-cols-[1fr_auto_1fr] items-center gap-2.5 px-5 py-[0.938rem] md:px-10">
+        {/* Cortina blanca (Plan 05 §3.2): la única capa que se anima; el
+            contenido no se mueve, así que no hay salto de layout. */}
+        <div aria-hidden className="header-surface" />
+        <div className="relative z-10 grid min-h-[3.375rem] grid-cols-[1fr_auto_1fr] items-center gap-2.5 px-5 py-[0.938rem] md:px-10">
           {/* Zona izquierda: Menú + Buscar (texto + icono, §2.1) */}
           <div className="flex items-center gap-5">
             <button

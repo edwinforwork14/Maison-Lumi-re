@@ -10,6 +10,12 @@ import { QuantitySelector } from '@/components/ui/QuantitySelector'
 import { ProductGrid } from '@/components/product/ProductGrid'
 import { SectionHeading } from '@/components/ui/SectionHeading'
 import { Breadcrumb, type Crumb } from '@/components/ui/Breadcrumb'
+import {
+  ProductDetailsOverlay,
+  type DetailsSection,
+} from '@/components/product/ProductDetailsOverlay'
+import { Icon } from '@/components/ui/Icon'
+import { useRipple } from '@/hooks/use-ripple'
 
 /**
  * Ficha de producto compartida (brief overlay §17): la ruta
@@ -25,17 +31,28 @@ export interface ProductDetailViewProps {
   readonly categories: readonly Category[]
   /** Cierre del overlay al navegar desde las migas (no aplica en la ruta). */
   readonly onNavigate?: () => void
+  /**
+   * `true` dentro del quick-view (Plan 05 §4.4): el overlay de detalles no
+   * toca el scroll del body (el quick-view ya lo bloquea) y su Escape no se
+   * propaga (cierra primero el panel, después el quick-view).
+   */
+  readonly nested?: boolean
 }
 
 export function ProductDetailView({
   product,
   categories,
   onNavigate,
+  nested = false,
 }: ProductDetailViewProps) {
   const { addToCart, toggleWishlist, isWishlisted } = useStore()
   const [color, setColor] = useState(product.colors[0] ?? '')
   const [quantity, setQuantity] = useState(1)
   const [imageIndex, setImageIndex] = useState(0)
+  // Overlay de detalles (Plan 05 §4.3): sección abierta ahora mismo.
+  const [detailsSection, setDetailsSection] = useState<DetailsSection | null>(null)
+  // Onda de click en «Añadir al carrito» y wishlist (Plan 05 §5.3).
+  const { onPointerDown, onKeyDown } = useRipple()
 
   // Umbral de envío gratuito desde `site_settings` (defecto D37): la UI no
   // tiene constantes de envío.
@@ -191,6 +208,8 @@ export function ProductDetailView({
             type="button"
             disabled={soldOut}
             onClick={() => addToCart(product.id, color, quantity)}
+            onPointerDown={onPointerDown}
+            onKeyDown={onKeyDown}
             className="mb-4 btn btn-solid btn-block label-wide disabled:cursor-not-allowed disabled:bg-line-light"
           >
             {soldOut ? 'Agotado' : 'Añadir al carrito'}
@@ -199,35 +218,49 @@ export function ProductDetailView({
           <button
             type="button"
             onClick={() => toggleWishlist(product.id)}
-            className="mb-10 w-full border border-strong py-4 label-wide transition-colors hover:bg-subtle"
+            onPointerDown={onPointerDown}
+            onKeyDown={onKeyDown}
+            className="ripple-host mb-10 w-full border border-strong py-4 label-wide transition-colors hover:bg-subtle"
           >
             {wishlisted ? '♥ En wishlist' : '♡ Añadir a wishlist'}
           </button>
 
-          {/* Detalles */}
+          {/* Detalles — Plan 05 §4.3: los `<details>` pasan a botones que
+              abren el overlay deslizante. Misma piel (eyebrow + chevron que
+              rota), `aria-expanded`/`aria-controls`, misma información. */}
           <div className="space-y-4 border-t border-line pt-8 text-sm">
-            <details className="group">
-              <summary className="eyebrow cursor-pointer list-none marker:hidden">
-                Detalles del producto
-              </summary>
-              <ul className="mt-3 space-y-1.5 text-text-secondary">
-                <li>· Materiales: {product.materials.join(', ')}</li>
-                <li>· Colores disponibles: {product.colors.join(', ')}</li>
-                <li>· Ref. {product.id.toUpperCase()}</li>
-              </ul>
-            </details>
-            <details className="group">
-              <summary className="eyebrow cursor-pointer list-none">
-                Envío y devoluciones
-              </summary>
-              <p className="mt-3 text-text-secondary">
-                Envío estándar 3–5 días
-                {settings
-                  ? ` (gratuito a partir de ${formatCents(settings.freeShippingThresholdCents)})`
-                  : ''}
-                . Express 24–48 h. Devoluciones gratuitas durante 30 días.
-              </p>
-            </details>
+            <button
+              type="button"
+              onClick={() => setDetailsSection('product')}
+              aria-expanded={detailsSection === 'product'}
+              aria-controls="details-overlay-product"
+              className="eyebrow flex w-full cursor-pointer items-center justify-between gap-3 text-left"
+            >
+              Detalles del producto
+              <Icon
+                name="chevron-down"
+                size={14}
+                className={`transition-transform duration-[320ms] ${
+                  detailsSection === 'product' ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetailsSection('shipping')}
+              aria-expanded={detailsSection === 'shipping'}
+              aria-controls="details-overlay-shipping"
+              className="eyebrow flex w-full cursor-pointer items-center justify-between gap-3 text-left"
+            >
+              Envío y devoluciones
+              <Icon
+                name="chevron-down"
+                size={14}
+                className={`transition-transform duration-[320ms] ${
+                  detailsSection === 'shipping' ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
           </div>
         </div>
       </div>
@@ -239,6 +272,17 @@ export function ProductDetailView({
       <div className="mx-auto max-w-7xl px-4 pb-10 md:px-8">
         <Breadcrumb items={breadcrumbItems} />
       </div>
+
+      {/* Overlay de detalles (Plan 05 §4): una sola implementación sirve a la
+          ruta y al quick-view (la ficha es compartida). */}
+      <ProductDetailsOverlay
+        open={detailsSection !== null}
+        section={detailsSection}
+        onClose={() => setDetailsSection(null)}
+        product={product}
+        freeShippingThresholdCents={settings?.freeShippingThresholdCents}
+        nested={nested}
+      />
     </div>
   )
 }

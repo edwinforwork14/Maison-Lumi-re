@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="48" viewBox="0 0 240 48" role="img" aria-label="Maison Lumière">
+  <!-- Marca tipográfica provisional (Plan 05 S3): wordmark en texto.
+       Cuando llegue el logo definitivo, copiarlo en esta ruta y no se
+       toca nada más (único punto de cambio: LOGO_URL en Preloader.tsx). -->
+  <text x="120" y="30" text-anchor="middle" fill="#0a0a0a" font-family="Jost, futura, helvetica, arial, sans-serif" font-size="14" letter-spacing="5.6" style="text-transform: uppercase">MAISON LUMIÈRE</text>
+</svg>

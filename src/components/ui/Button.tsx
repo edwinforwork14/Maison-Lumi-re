@@ -1,6 +1,7 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from 'react'
 import { Link, type LinkProps } from '@tanstack/react-router'
 import { cn } from '@/lib/cn'
+import { useRipple } from '@/hooks/use-ripple'
 
 /**
  * Matriz de botones de la referencia (Plan 04 §3.3): una sola medida
@@ -35,6 +36,12 @@ function compose(variant: Variant, size: Size, className?: string): string {
   return cn('btn', variantCls[variant], sizeCls[size], className)
 }
 
+/** Onda expansiva de click compartida por la matriz de botones (Plan 05 §5). */
+function useRippleHandlers() {
+  const { onPointerDown, onKeyDown } = useRipple()
+  return { onPointerDown, onKeyDown } as const
+}
+
 /**
  * Botón puro (corrige D8: ya no mezcla botón y enlace con `to?: string`).
  * Para navegación use <ButtonLink>, con rutas tipadas por el generador.
@@ -50,8 +57,9 @@ export function Button({
   variant?: Variant
   size?: Size
 }) {
+  const ripple = useRippleHandlers()
   return (
-    <button type={type} className={compose(variant, size, className)} {...rest}>
+    <button type={type} className={compose(variant, size, className)} {...ripple} {...rest}>
       {children}
     </button>
   )
@@ -72,8 +80,9 @@ export function ButtonLink({
   size?: Size
   className?: string
 }) {
+  const ripple = useRippleHandlers()
   return (
-    <Link className={compose(variant, size, className)} {...rest}>
+    <Link className={compose(variant, size, className)} {...ripple} {...rest}>
       {children}
     </Link>
   )
@@ -95,8 +104,9 @@ export function ButtonAnchor({
   variant?: Variant
   size?: Size
 }) {
+  const ripple = useRippleHandlers()
   return (
-    <a href={href} className={compose(variant, size, className)} {...rest}>
+    <a href={href} className={compose(variant, size, className)} {...ripple} {...rest}>
       {children}
     </a>
   )
