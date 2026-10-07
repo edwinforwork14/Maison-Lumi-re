@@ -11,11 +11,12 @@ export const PRELOADER_MAX_MS = 4000
 /** Tope absoluto: pase lo que pase, el preloader se retira (§6.4). */
 export const PRELOADER_HARD_STOP_MS = 6000
 /**
- * Duración total de la secuencia de salida (§6.3): las mitades se separan
- * en `--duration-dissolve` (3200 ms) y el logo termina después
- * (0.7 s de retardo + 1.8 s = 2500 ms). Margen corto para el último frame.
+ * Duración total de la secuencia de salida (§6.3): el fondo y la mariposa
+ * abren al unísono (0.9 s desde 0 s) y las letras salen después (1.08 s desde
+ * 0.24 s), así que la última termina a los 1.32 s. Margen corto para el último
+ * frame.
  */
-export const PRELOADER_EXIT_MS = 3400
+export const PRELOADER_EXIT_MS = 1500
 
 export function resolvePreloaderPhase(input: {
   elapsedMs: number

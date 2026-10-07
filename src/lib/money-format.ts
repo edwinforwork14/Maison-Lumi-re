@@ -45,3 +45,4 @@ export function majorFromCents(m: Money): number {
 export function formatCents(cents: number): string {
   return formatMoney(money(Math.round(cents)))
 }
+

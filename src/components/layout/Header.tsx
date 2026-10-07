@@ -9,6 +9,7 @@ import { MenuModal } from './MenuModal'
 import { MegaDropdown } from './MegaDropdown'
 import { SearchOverlay } from './SearchOverlay'
 import { useMegaMenu } from './use-mega-menu'
+import HEADER_LOGO_URL from '@/public/logo.png'
 import type { NavCategory, NavCollection } from './MegaMenu'
 
 export interface HeaderProps {
@@ -81,12 +82,20 @@ export function Header({ categories, collections }: HeaderProps) {
             </button>
           </div>
 
-          {/* Centro: wordmark */}
+          {/* Centro: logo (PNG de la carpeta `public`). El archivo trae mucho
+              aire transparente arriba y abajo, así que se pinta más alto y se
+              recorta con el contenedor para dejar la firma a la altura de la
+              cabecera sin que esta crezca. */}
           <Link
             to="/"
-            className="whitespace-nowrap text-center text-[15px] font-medium uppercase tracking-[0.35em] transition-colors hover:text-text-secondary"
+            aria-label="Maison Lumière"
+            className="flex h-[1.55rem] items-center justify-center overflow-hidden transition-opacity hover:opacity-70"
           >
-            Maison Lumière
+            <img
+              src={HEADER_LOGO_URL}
+              alt=""
+              className="h-[3.7rem] w-auto max-w-none"
+            />
           </Link>
 
           {/* Zona derecha: wishlist + carrito con contador dentro (§2.1) */}

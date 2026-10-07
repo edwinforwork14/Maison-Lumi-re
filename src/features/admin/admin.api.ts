@@ -19,6 +19,8 @@ import {
 import {
   adjustAdminInventory,
   createAdminProduct,
+  createAdminProductWithVariant,
+  createAdminProductWithVariants,
   dashboardKpis,
   deleteAdminVariant,
   getAdminProduct,
@@ -250,6 +252,82 @@ export const adminCreateProduct = createServerFn({ method: 'POST' })
   .validator(productInputSchema)
   .handler(async ({ data }): Promise<{ id: string }> =>
     createAdminProduct(await currentActor(), data),
+  )
+
+/**
+ * Alta en un solo paso: producto + primera variante + stock, y opcionalmente
+ * publicado. Es la vía normal del panel; `adminCreateProduct` queda para
+ * scripts que quieran el borrador vacío.
+ */
+const productWithVariantSchema = productInputSchema.extend({
+  variant: z.object({
+    sku: z
+      .string()
+      .trim()
+      .min(2)
+      .max(60)
+      .regex(/^[A-Za-z0-9._-]+$/, 'El SKU solo admite letras, números, punto, guion y guion bajo'),
+    color: z.string().trim().min(2).max(40),
+    size: z.string().trim().max(30).default('Única'),
+    priceCents: z.number().int().nonnegative(),
+    compareAtPriceCents: z.number().int().nonnegative().nullable().optional(),
+    initialStock: z.number().int().nonnegative().max(1_000_000).default(0),
+  }),
+  publish: z.boolean().optional(),
+})
+
+export const adminCreateProductWithVariant = createServerFn({ method: 'POST' })
+  .validator(productWithVariantSchema)
+  .handler(
+    async ({ data }): Promise<{ id: string; variantId: string; status: 'draft' | 'active' }> =>
+      createAdminProductWithVariant(await currentActor(), data),
+  )
+
+/**
+ * Alta completa estilo KAOZ: producto + marca (existente o creada) + varios
+ * colores, cada uno con sus tallas, stock y SKU, en una sola llamada.
+ */
+const productVariantGroupSchema = z.object({
+  color: z.string().trim().min(2).max(40),
+  colorHex: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'El color debe ser hexadecimal #RRGGBB')
+    .nullable()
+    .optional(),
+  sizes: z
+    .array(
+      z.object({
+        size: z.string().trim().min(1).max(30),
+        stock: z.number().int().nonnegative().max(1_000_000).default(0),
+        sku: z
+          .string()
+          .trim()
+          .min(2)
+          .max(60)
+          .regex(/^[A-Za-z0-9._-]+$/, 'El SKU solo admite letras, números, punto, guion y guion bajo')
+          .nullable()
+          .optional(),
+      }),
+    )
+    .min(1)
+    .max(60),
+})
+
+const productWithVariantsSchema = productInputSchema.extend({
+  brandId: z.string().uuid().nullable().optional(),
+  brandName: z.string().trim().min(2).max(80).nullable().optional(),
+  priceCents: z.number().int().nonnegative(),
+  compareAtPriceCents: z.number().int().nonnegative().nullable().optional(),
+  publish: z.boolean().optional(),
+  variants: z.array(productVariantGroupSchema).min(1).max(30),
+})
+
+export const adminCreateProductWithVariants = createServerFn({ method: 'POST' })
+  .validator(productWithVariantsSchema)
+  .handler(
+    async ({ data }): Promise<{ id: string; status: 'draft' | 'active'; variantIds: string[] }> =>
+      createAdminProductWithVariants(await currentActor(), data),
   )
 
 const productPatchSchema = z.object({

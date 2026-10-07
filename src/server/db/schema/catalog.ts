@@ -162,6 +162,12 @@ export const productVariants = pgTable(
     sku: text('sku').notNull(),
     size: text('size').notNull(),
     color: text('color').notNull(),
+    /**
+     * Color en hexadecimal (`#RRGGBB`) para las muestras de la tienda. Es
+     * opcional: el catálogo histórico puede no tenerlo, y el panel lo pide al
+     * dar de alta una variante.
+     */
+    colorHex: text('color_hex'),
     /** Céntimos: entero, nunca decimal. */
     priceCents: bigint('price_cents', { mode: 'number' }).notNull(),
     /** Precio tachado; si existe, nunca por debajo del real. */

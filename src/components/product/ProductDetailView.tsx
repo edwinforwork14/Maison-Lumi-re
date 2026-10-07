@@ -48,7 +48,26 @@ export function ProductDetailView({
   const { addToCart, toggleWishlist, isWishlisted } = useStore()
   const [color, setColor] = useState(product.colors[0] ?? '')
   const [quantity, setQuantity] = useState(1)
-  const [imageIndex, setImageIndex] = useState(0)
+  // Galería deslizante (Plan 05 §6.1): `displayed` es la imagen asentada,
+  // `incoming` la que entra con deslizamiento direccional y `dir` su sentido.
+  const [displayed, setDisplayed] = useState(0)
+  const [incoming, setIncoming] = useState<number | null>(null)
+  const [dir, setDir] = useState<1 | -1>(1)
+  const count = product.images.length
+  // Navegación direccional con wrap-around: `delta === 1` es siguiente (entra
+  // desde la derecha), cualquier otra es anterior (entra desde la izquierda).
+  const go = (target: number) => {
+    const next = (target + count) % count
+    const delta = (next - displayed + count) % count
+    if (delta === 0) return
+    setDir(delta === 1 ? 1 : -1)
+    setIncoming(next)
+  }
+  const onIncomingEnd = () => {
+    if (incoming === null) return
+    setDisplayed(incoming)
+    setIncoming(null)
+  }
   // Overlay de detalles (Plan 05 §4.3): sección abierta ahora mismo.
   const [detailsSection, setDetailsSection] = useState<DetailsSection | null>(null)
   // Onda de click en «Añadir al carrito» y wishlist (Plan 05 §5.3).
@@ -100,33 +119,71 @@ export function ProductDetailView({
               <button
                 key={src}
                 type="button"
-                onClick={() => setImageIndex(i)}
+                onClick={() => go(i)}
                 className={`overflow-hidden border transition-colors ${
-                  imageIndex === i ? 'border-strong' : 'border-transparent'
+                  displayed === i ? 'border-strong' : 'border-transparent'
                 }`}
                 aria-label={`Ver imagen ${i + 1}`}
+                aria-current={displayed === i}
               >
                 <img src={src} alt="" className="aspect-3/4 w-full object-cover" />
               </button>
             ))}
           </div>
           <div className="flex-1 bg-subtle">
-            <img
-              src={product.images[imageIndex]}
-              alt={product.name}
-              className="aspect-3/4 w-full object-cover animate-fade-in"
-            />
+            <div className="group relative">
+              <img
+                src={product.images[displayed]}
+                alt={product.name}
+                className="gallery-img block aspect-3/4 w-full object-cover"
+              />
+              {incoming !== null && (
+                <img
+                  key={incoming}
+                  src={product.images[incoming]}
+                  alt=""
+                  aria-hidden
+                  onAnimationEnd={onIncomingEnd}
+                  className={`gallery-img absolute inset-0 h-full w-full object-cover ${
+                    dir === 1 ? 'gallery-in-right' : 'gallery-in-left'
+                  }`}
+                />
+              )}
+              {/* Flechas prev/next (sólo si hay más de una imagen), reveladas
+                  al hover en desktop; en móvil se usan las miniaturas. */}
+              {count > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => go(displayed - 1)}
+                    aria-label="Imagen anterior"
+                    className="absolute left-4 top-1/2 hidden size-10 -translate-y-1/2 place-items-center rounded-full bg-frost text-strong opacity-0 shadow-frost backdrop-blur-[10px] transition-opacity duration-200 hover:bg-frost-transparent [@media(hover:hover)and(pointer:fine)]:group-hover:opacity-100 md:grid"
+                  >
+                    <Icon name="chevron-left" size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => go(displayed + 1)}
+                    aria-label="Imagen siguiente"
+                    className="absolute right-4 top-1/2 hidden size-10 -translate-y-1/2 place-items-center rounded-full bg-frost text-strong opacity-0 shadow-frost backdrop-blur-[10px] transition-opacity duration-200 hover:bg-frost-transparent [@media(hover:hover)and(pointer:fine)]:group-hover:opacity-100 md:grid"
+                  >
+                    <Icon name="chevron-right" size={20} />
+                  </button>
+                </>
+              )}
+            </div>
             {/* Thumbnails mobile */}
             <div className="flex gap-2 p-3 md:hidden">
               {product.images.map((src, i) => (
                 <button
                   key={src}
                   type="button"
-                  onClick={() => setImageIndex(i)}
+                  onClick={() => go(i)}
                   className={`flex-1 overflow-hidden border ${
-                    imageIndex === i ? 'border-strong' : 'border-transparent'
+                    displayed === i ? 'border-strong' : 'border-transparent'
                   }`}
                   aria-label={`Ver imagen ${i + 1}`}
+                  aria-current={displayed === i}
                 >
                   <img src={src} alt="" className="aspect-square w-full object-cover" />
                 </button>

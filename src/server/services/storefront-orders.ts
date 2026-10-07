@@ -109,11 +109,21 @@ export interface QuoteCartInput {
   readonly email?: string
 }
 
+/**
+ * Forma de los ids que acepta la columna `uuid`. El carrito vive en
+ * `localStorage` (dato no confiable y que sobrevive a versiones anteriores del
+ * catálogo), así que un id con otra forma no debe llegar al SQL: PostgreSQL
+ * abortaría la consulta entera con `22P02` y rompería toda la cotización.
+ */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function quoteCartFromDb(
   input: QuoteCartInput,
   db: Database = getDb(),
 ): Promise<CartQuote> {
-  const productIds = [...new Set(input.lines.map((line) => line.productId))]
+  const productIds = [...new Set(input.lines.map((line) => line.productId))].filter((id) =>
+    UUID_PATTERN.test(id),
+  )
   const requested = input.lines.filter((line) => line.quantity > 0)
 
   const variantRows =

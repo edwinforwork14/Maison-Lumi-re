@@ -199,6 +199,388 @@ export async function createAdminProduct(
   })
 }
 
+export interface CreateProductWithVariantInput {
+  readonly slug: string
+  readonly name: string
+  readonly categoryId: string
+  readonly shortDescription?: string | null
+  readonly description?: string | null
+  readonly featured?: boolean
+  /** Primera variante, creada en la misma transacción. */
+  readonly variant: {
+    readonly sku: string
+    readonly color: string
+    readonly size?: string
+    readonly priceCents: number
+    readonly compareAtPriceCents?: number | null
+    readonly initialStock?: number
+  }
+  /** `true`: nace ya publicado (estado activo + `published_at` + variante activa). */
+  readonly publish?: boolean
+}
+
+/**
+ * Alta en UN SOLO PASO: producto + primera variante + existencias, todo en una
+ * transacción. Sustituye el ir y venir «crear borrador → abrir ficha → añadir
+ * variante» y evita el estado intermedio «producto sin variante», que no se
+ * puede publicar. Con `publish` nace vendible ya (publicar exige variantes, y
+ * aquí siempre hay una).
+ */
+export async function createAdminProductWithVariant(
+  actor: AdminActor | null,
+  input: CreateProductWithVariantInput,
+  db: Database = getDb(),
+): Promise<{ id: string; variantId: string; status: 'draft' | 'active' }> {
+  assertPermission(actor, PERMISSIONS.productsWrite)
+  if (input.publish) assertPermission(actor, PERMISSIONS.productsPublish)
+
+  const price = input.variant.priceCents
+  if (!Number.isInteger(price) || price < 0) {
+    throw new AppError('VALIDATION', 'El precio debe ser un entero en céntimos')
+  }
+  const compareAt = input.variant.compareAtPriceCents ?? null
+  if (compareAt != null && compareAt < price) {
+    throw new AppError('VALIDATION', 'El precio tachado no puede ser menor que el precio actual')
+  }
+  const initialStock = input.variant.initialStock ?? 0
+  if (!Number.isInteger(initialStock) || initialStock < 0) {
+    throw new AppError('VALIDATION', 'El stock inicial debe ser un entero no negativo')
+  }
+
+  const status: 'draft' | 'active' = input.publish ? 'active' : 'draft'
+  const slug = input.slug.trim()
+  const sku = input.variant.sku.trim()
+  const color = input.variant.color.trim()
+  const audit = createPostgresAuditRepository(db)
+
+  return db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.slug, slug))
+      .limit(1)
+    if (existing.length > 0) {
+      throw new AppError('CONFLICT', `Ya existe un producto con el slug ${slug}`)
+    }
+
+    const duplicateSku = await tx
+      .select({ id: productVariants.id })
+      .from(productVariants)
+      .where(eq(productVariants.sku, sku))
+      .limit(1)
+    if (duplicateSku.length > 0) {
+      throw new AppError('CONFLICT', `Ya existe una variante con el SKU ${sku}`)
+    }
+
+    const [product] = await tx
+      .insert(products)
+      .values({
+        slug,
+        name: input.name.trim(),
+        categoryId: input.categoryId,
+        shortDescription: input.shortDescription ?? null,
+        description: input.description ?? null,
+        featured: input.featured ?? false,
+        status,
+        publishedAt: status === 'active' ? new Date() : null,
+      })
+      .returning({ id: products.id })
+
+    const [variant] = await tx
+      .insert(productVariants)
+      .values({
+        productId: product!.id,
+        sku,
+        size: (input.variant.size ?? '').trim() || 'Única',
+        color,
+        priceCents: price,
+        compareAtPriceCents: compareAt,
+        status,
+      })
+      .returning({ id: productVariants.id })
+
+    await tx.insert(inventoryItems).values({
+      variantId: variant!.id,
+      onHand: initialStock,
+      reserved: 0,
+      lowStockThreshold: 0,
+    })
+
+    await audit.record({
+      actorId: actor!.userId,
+      actorKind: 'user',
+      action: 'product.create',
+      entity: 'products',
+      entityId: product!.id,
+      before: null,
+      after: { slug, name: input.name.trim(), status },
+    })
+    await audit.record({
+      actorId: actor!.userId,
+      actorKind: 'user',
+      action: 'variant.create',
+      entity: 'product_variants',
+      entityId: variant!.id,
+      before: null,
+      after: { sku, priceCents: price, color, initialStock },
+    })
+    if (status === 'active') {
+      await audit.record({
+        actorId: actor!.userId,
+        actorKind: 'user',
+        action: 'product.publish',
+        entity: 'products',
+        entityId: product!.id,
+        before: { status: 'draft' },
+        after: { status: 'active' },
+      })
+    }
+
+    return { id: product!.id, variantId: variant!.id, status }
+  })
+}
+
+/**
+ * Alta completa al estilo KAOZ: un producto con varias **agrupaciones de color**
+ * y, dentro de cada una, sus tallas con stock y SKU. Cada (color, talla) se
+ * convierte en una fila de `product_variants`, con su `inventory_items`. Un
+ * único precio (y precio tachado) para todo el producto, como en KAOZ.
+ */
+export interface CreateVariantGroupInput {
+  readonly color: string
+  readonly colorHex?: string | null
+  readonly sizes: readonly {
+    readonly size: string
+    readonly stock?: number
+    /** Si falta, se genera desde el slug: `SLUG-COLOR-TALLA`. */
+    readonly sku?: string | null
+  }[]
+}
+
+export interface CreateProductWithVariantsInput {
+  readonly slug: string
+  readonly name: string
+  readonly categoryId: string
+  /** Marca existente. Si falta y hay `brandName`, se crea/reutiliza por slug. */
+  readonly brandId?: string | null
+  readonly brandName?: string | null
+  readonly shortDescription?: string | null
+  readonly description?: string | null
+  readonly featured?: boolean
+  /** `true`: nace publicado (estado activo + `published_at` + variantes activas). */
+  readonly publish?: boolean
+  readonly priceCents: number
+  readonly compareAtPriceCents?: number | null
+  readonly variants: readonly CreateVariantGroupInput[]
+}
+
+/** Código seguro para formar SKUs automáticos a partir de texto libre. */
+function skuFragment(value: string, fallback: string): string {
+  const cleaned = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return cleaned || fallback
+}
+
+export async function createAdminProductWithVariants(
+  actor: AdminActor | null,
+  input: CreateProductWithVariantsInput,
+  db: Database = getDb(),
+): Promise<{ id: string; status: 'draft' | 'active'; variantIds: string[] }> {
+  assertPermission(actor, PERMISSIONS.productsWrite)
+  if (input.publish) assertPermission(actor, PERMISSIONS.productsPublish)
+
+  const price = input.priceCents
+  if (!Number.isInteger(price) || price < 0) {
+    throw new AppError('VALIDATION', 'El precio debe ser un entero en céntimos')
+  }
+  const compareAt = input.compareAtPriceCents ?? null
+  if (compareAt != null && (!Number.isInteger(compareAt) || compareAt < price)) {
+    throw new AppError('VALIDATION', 'El precio tachado no puede ser menor que el precio actual')
+  }
+  if (input.variants.length === 0) {
+    throw new AppError('VALIDATION', 'El producto necesita al menos un color con sus tallas')
+  }
+
+  const slug = input.slug.trim()
+  const status: 'draft' | 'active' = input.publish ? 'active' : 'draft'
+
+  // Se aplana (color, talla) y se valida en memoria antes de tocar la base: así
+  // un duplicado da `VALIDATION` claro en vez de reventar la restricción UNIQUE.
+  interface PlannedVariant {
+    readonly color: string
+    readonly colorHex: string | null
+    readonly size: string
+    readonly sku: string
+    readonly stock: number
+  }
+  const planned: PlannedVariant[] = []
+  const seenPairs = new Set<string>()
+  const seenSkus = new Set<string>()
+  for (const group of input.variants) {
+    const color = group.color.trim()
+    if (!color) throw new AppError('VALIDATION', 'Cada color necesita un nombre')
+    if (group.sizes.length === 0) {
+      throw new AppError('VALIDATION', `El color ${color} necesita al menos una talla`)
+    }
+    const colorFragment = skuFragment(color, 'COLOR')
+    for (const entry of group.sizes) {
+      const size = entry.size.trim() || 'Única'
+      const pair = `${color}\u0000${size}`
+      if (seenPairs.has(pair)) {
+        throw new AppError('VALIDATION', `La combinación ${color} / ${size} está repetida`)
+      }
+      seenPairs.add(pair)
+
+      const stock = entry.stock ?? 0
+      if (!Number.isInteger(stock) || stock < 0) {
+        throw new AppError('VALIDATION', 'El stock debe ser un entero no negativo')
+      }
+      const sku =
+        entry.sku?.trim() || `${slug}-${colorFragment}-${skuFragment(size, 'UNICA')}`
+      if (seenSkus.has(sku)) {
+        throw new AppError('VALIDATION', `El SKU ${sku} está repetido en el formulario`)
+      }
+      seenSkus.add(sku)
+
+      planned.push({ color, colorHex: group.colorHex?.trim() || null, size, sku, stock })
+    }
+  }
+
+  const audit = createPostgresAuditRepository(db)
+
+  return db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.slug, slug))
+      .limit(1)
+    if (existing.length > 0) {
+      throw new AppError('CONFLICT', `Ya existe un producto con el slug ${slug}`)
+    }
+
+    const clash = await tx
+      .select({ sku: productVariants.sku })
+      .from(productVariants)
+      .where(inArray(productVariants.sku, planned.map((variant) => variant.sku)))
+    if (clash.length > 0) {
+      throw new AppError('CONFLICT', `Ya existe una variante con el SKU ${clash[0]!.sku}`)
+    }
+
+    // Marca: se usa la elegida o se crea/reutiliza por slug a partir del nombre
+    // (el «crear si falta» del formulario, sin salir de la transacción).
+    let brandId: string | null = input.brandId ?? null
+    if (!brandId && input.brandName?.trim()) {
+      const brandName = input.brandName.trim()
+      const brandSlug = skuFragment(brandName, 'MARCA').toLowerCase()
+      const [found] = await tx
+        .select({ id: brands.id })
+        .from(brands)
+        .where(eq(brands.slug, brandSlug))
+        .limit(1)
+      if (found) {
+        brandId = found.id
+      } else {
+        const [createdBrand] = await tx
+          .insert(brands)
+          .values({ slug: brandSlug, name: brandName, status: 'active' })
+          .returning({ id: brands.id })
+        brandId = createdBrand!.id
+        await audit.record({
+          actorId: actor!.userId,
+          actorKind: 'user',
+          action: 'brand.create',
+          entity: 'brands',
+          entityId: createdBrand!.id,
+          before: null,
+          after: { slug: brandSlug, name: brandName },
+        })
+      }
+    }
+
+    const [product] = await tx
+      .insert(products)
+      .values({
+        slug,
+        name: input.name.trim(),
+        categoryId: input.categoryId,
+        brandId,
+        shortDescription: input.shortDescription ?? null,
+        description: input.description ?? null,
+        featured: input.featured ?? false,
+        status,
+        publishedAt: status === 'active' ? new Date() : null,
+      })
+      .returning({ id: products.id })
+
+    const variantIds: string[] = []
+    for (const variant of planned) {
+      const [row] = await tx
+        .insert(productVariants)
+        .values({
+          productId: product!.id,
+          sku: variant.sku,
+          size: variant.size,
+          color: variant.color,
+          colorHex: variant.colorHex,
+          priceCents: price,
+          compareAtPriceCents: compareAt,
+          status,
+        })
+        .returning({ id: productVariants.id })
+      variantIds.push(row!.id)
+
+      await tx.insert(inventoryItems).values({
+        variantId: row!.id,
+        onHand: variant.stock,
+        reserved: 0,
+        lowStockThreshold: 0,
+      })
+      await audit.record({
+        actorId: actor!.userId,
+        actorKind: 'user',
+        action: 'variant.create',
+        entity: 'product_variants',
+        entityId: row!.id,
+        before: null,
+        after: {
+          sku: variant.sku,
+          color: variant.color,
+          size: variant.size,
+          priceCents: price,
+          initialStock: variant.stock,
+        },
+      })
+    }
+
+    await audit.record({
+      actorId: actor!.userId,
+      actorKind: 'user',
+      action: 'product.create',
+      entity: 'products',
+      entityId: product!.id,
+      before: null,
+      after: { slug, name: input.name.trim(), status, variants: variantIds.length },
+    })
+    if (status === 'active') {
+      await audit.record({
+        actorId: actor!.userId,
+        actorKind: 'user',
+        action: 'product.publish',
+        entity: 'products',
+        entityId: product!.id,
+        before: { status: 'draft' },
+        after: { status: 'active' },
+      })
+    }
+
+    return { id: product!.id, status, variantIds }
+  })
+}
+
 /** Actualiza un producto, guardando sólo los campos que cambian. */
 export async function updateAdminProduct(
   actor: AdminActor | null,

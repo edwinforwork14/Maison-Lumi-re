@@ -13,7 +13,9 @@
   --font-serif: var(--font-sans); /* compat: sólo la usa el panel admin (4 rutas) */
 
   /* ─── Superficies y texto (§1.2) ──────────────────────────────────────── */
-  --color-surface: #ffffff;
+  /* El «blanco» de la web es el marfil #F4F2EC (decisión del usuario); el
+     resto de blancos (frost, ripples, texto sobre negro) lo siguen. */
+  --color-surface: #f4f2ec;
   --color-surface-off: #f9f9f9;
   --color-subtle: #f8f7f5; /* fondo de tarjeta, acordeón y modal */
   --color-subtle-hover: #ede9e3;
@@ -28,11 +30,11 @@
   --color-danger: #bb3322;
 
   /* ─── Frost / overlays (§1.3) ─────────────────────────────────────────── */
-  --color-frost: rgb(255 255 255 / 0.95);
-  --color-frost-transparent: rgb(255 255 255 / 0.7);
+  --color-frost: rgb(244 242 236 / 0.95);
+  --color-frost-transparent: rgb(244 242 236 / 0.7);
   --color-frost-inverse: rgb(0 0 0 / 0.95);
   --color-overlay: rgb(0 0 0 / 0.2);
-  --color-border-frost: rgb(255 255 255 / 0.2);
+  --color-border-frost: rgb(244 242 236 / 0.2);
   --shadow-frost: 0 0 1px 0 rgb(0 0 0 / 0.15), 0 1px 4px 0 rgb(0 0 0 / 0.05);
   --blur-frost: 10px;
 
@@ -108,6 +110,28 @@
 @keyframes content-stagger {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Plan 05 §6.1: galería deslizante de la ficha de producto ─────────────
+   Entrada direccional de la imagen al navegar: siguiente entra desde la
+   derecha (moviéndose a la izquierda) y anterior desde la izquierda
+   (moviéndose a la derecha). Animación de una sola vez por navegación. */
+.gallery-in-right {
+  animation: gallery-in-right 0.5s var(--ease-chloe) both;
+}
+
+.gallery-in-left {
+  animation: gallery-in-left 0.5s var(--ease-chloe) both;
+}
+
+@keyframes gallery-in-right {
+  from { transform: translateX(100%); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes gallery-in-left {
+  from { transform: translateX(-100%); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
 @keyframes loader-logo-in {
@@ -232,14 +256,14 @@
   @apply border border-strong text-strong bg-surface hover:bg-strong hover:text-surface disabled:border-line-light disabled:text-text-secondary disabled:cursor-not-allowed;
 
   /* La onda hereda el fondo oscuro del hover: sobre negro, la onda es
-     blanca translúcida. */
-  --wave-color: rgb(255 255 255 / 0.25);
+     marfil translúcida. */
+  --wave-color: rgb(244 242 236 / 0.25);
 }
 
 @utility btn-solid {
-  @apply bg-frost-inverse text-white shadow-frost hover:bg-black;
+  @apply bg-frost-inverse text-surface shadow-frost hover:bg-black;
 
-  --wave-color: rgb(255 255 255 / 0.25);
+  --wave-color: rgb(244 242 236 / 0.25);
 }
 
 @utility btn-frost {
@@ -279,7 +303,7 @@ body {
 
 ::selection {
   background: var(--color-strong);
-  color: white;
+  color: var(--color-surface);
 }
 
 /* Accesibilidad: foco siempre visible en navegación por teclado. */
@@ -295,9 +319,9 @@ body {
    selector global excluye `#preloader` y su subtree: un `unset` posterior
    no serviría (`animation-duration: unset` computa a `0s`). */
 @media (prefers-reduced-motion: reduce) {
-  *:not(#preloader, #preloader *),
-  *:not(#preloader, #preloader *)::before,
-  *:not(#preloader, #preloader *)::after {
+  *:not(#preloader, #preloader *, .product-card-img, .gallery-img),
+  *:not(#preloader, #preloader *, .product-card-img, .gallery-img)::before,
+  *:not(#preloader, #preloader *, .product-card-img, .gallery-img)::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -403,19 +427,75 @@ body {
    sin tirones. */
 .preloader-exiting .preloader-half-left,
 .preloader-exiting .preloader-half-right,
+.preloader-exiting .preloader-image-half-left,
+.preloader-exiting .preloader-image-half-right,
 .preloader-exiting .preloader-logo-half-left,
 .preloader-exiting .preloader-logo-half-right {
   will-change: transform, opacity, filter;
 }
 
-/* El logo ocupa TODO el overlay: cada mitad replica el logo centrado en
-   pantalla y lo recorta a su lado — así la mitad izquierda del logo sale
-   hacia la izquierda y la derecha hacia la derecha, sin costuras. */
+/* La imagen y las letras usan la misma técnica que antes el logo: cada mitad
+   es una capa a pantalla completa que centra el contenido y lo recorta en la
+   mitad del viewport, de modo que el corte cae siempre en el centro y las dos
+   mitades encajan sin costuras. La imagen se sube (padding-bottom) y las letras
+   se bajan (padding-top) para que la imagen quede ARRIBA. */
+.preloader-image,
 .preloader-logo {
   position: absolute;
   inset: 0;
-  z-index: 10;
+  display: grid;
+}
+
+.preloader-image {
+  z-index: 9;
   animation: loader-logo-in 0.6s var(--ease-chloe) both;
+}
+
+.preloader-logo {
+  z-index: 10;
+  animation: loader-logo-in 0.6s var(--ease-chloe) 0.12s both;
+}
+
+.preloader-image-half-left,
+.preloader-image-half-right {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding-bottom: 9rem;
+  --loader-exit: -70%;
+}
+
+.preloader-image-half-left {
+  left: 0;
+  clip-path: inset(0 50% 0 0);
+}
+
+.preloader-image-half-right {
+  right: 0;
+  clip-path: inset(0 0 0 50%);
+  --loader-exit: 70%;
+}
+
+/* Mariposa: el ala original a la izquierda y su espejo a la derecha. */
+.preloader-image-compose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preloader-image-wing {
+  width: 14rem;
+  max-width: 34vw;
+  height: auto;
+}
+
+.preloader-image-wing-mirror {
+  transform: scaleX(-1);
+  /* Junta las alas: el ala espejada se solapa sobre la izquierda para que
+     las dos se lean como una sola mariposa (ajustable; solape actual -6.24rem,
+     un 20% más que los -5.2rem anteriores). */
+  margin-left: -6.24rem;
 }
 
 .preloader-logo-half-left,
@@ -424,6 +504,7 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
+  padding-top: 11rem;
   --loader-exit: -60%;
 }
 
@@ -438,16 +519,22 @@ body {
   --loader-exit: 60%;
 }
 
-.preloader-exiting .preloader-logo-half-left,
-.preloader-exiting .preloader-logo-half-right {
-  /* El logo sale DESPUÉS de que las mitades empezaron a abrirse: se ve
-     cómo la pantalla se parte y el logo escapa hacia los lados. */
-  animation: loader-logo-out 1.8s var(--ease-chloe) 0.7s both;
-}
-
+/* Salida: el fondo y la mariposa abren AL UNÍSONO (misma duración 0.9 s y
+   mismo arranque 0 s), así la pantalla y la imagen se parten a la vez. Las
+   letras salen después (0.24 s). */
 .preloader-exiting .preloader-half-left,
 .preloader-exiting .preloader-half-right {
-  animation: loader-panel-out var(--duration-dissolve) var(--ease-chloe) both;
+  animation: loader-panel-out 0.9s var(--ease-chloe) 0s both;
+}
+
+.preloader-exiting .preloader-image-half-left,
+.preloader-exiting .preloader-image-half-right {
+  animation: loader-panel-out 0.9s var(--ease-chloe) 0s both;
+}
+
+.preloader-exiting .preloader-logo-half-left,
+.preloader-exiting .preloader-logo-half-right {
+  animation: loader-logo-out 1.08s var(--ease-chloe) 0.24s both;
 }
 
 .preloader-progress {

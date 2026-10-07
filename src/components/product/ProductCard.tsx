@@ -59,7 +59,7 @@ export function ProductCard({ product }: { product: Product }) {
             src={product.images[0]}
             alt={product.name}
             loading="lazy"
-            className="absolute inset-0 h-full w-full object-cover transition-opacity duration-[250ms] group-hover:opacity-0"
+            className="product-card-img absolute inset-0 h-full w-full object-cover"
           />
           {product.images[1] && (
             <img
@@ -67,7 +67,7 @@ export function ProductCard({ product }: { product: Product }) {
               alt=""
               loading="lazy"
               aria-hidden
-              className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-[250ms] group-hover:opacity-100"
+              className="product-card-img absolute inset-0 h-full w-full object-cover translate-y-full opacity-0 transition-all duration-[600ms] ease-[cubic-bezier(.23,1,.32,1)] group-hover:translate-y-0 group-hover:opacity-100"
             />
           )}
         </figure>

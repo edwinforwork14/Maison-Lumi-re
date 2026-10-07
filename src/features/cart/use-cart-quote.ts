@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { quoteCart, type CartQuote } from '@/features/commerce.api'
 import { queryKeys } from '@/features/model/queries'
@@ -24,7 +24,7 @@ export function useCartQuote(
   shippingMethod?: ShippingMethodId,
   couponCode?: string,
 ): CartQuoteState {
-  const { cart } = useStore()
+  const { cart, reconcileCart } = useStore()
   const code = couponCode?.trim() ?? ''
   const lines = useMemo(
     () =>
@@ -44,6 +44,17 @@ export function useCartQuote(
     // Un código de cupón inválido no debe cachearse como si fuera la verdad.
     retry: false,
   })
+
+  // Autocorrección: cuando el servidor responde, las líneas que ya no reconoce
+  // (producto retirado o id de un catálogo anterior) se descartan del carrito
+  // local, para que el contador deje de anunciar piezas incotizables.
+  useEffect(() => {
+    if (!query.isSuccess || !query.data) return
+    const validKeys = new Set(
+      query.data.lines.map((line) => `${line.productId}::${line.color}`),
+    )
+    reconcileCart(validKeys)
+  }, [query.isSuccess, query.data, reconcileCart])
 
   return {
     quote: query.data ?? null,

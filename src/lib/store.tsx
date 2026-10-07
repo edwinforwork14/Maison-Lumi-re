@@ -72,6 +72,12 @@ interface StoreContextValue {
   updateQuantity: (productId: string, color: string, quantity: number) => void
   removeFromCart: (productId: string, color: string) => void
   clearCart: () => void
+  /**
+   * Descarta las líneas que el servidor ya no reconoce (producto retirado o
+   * id de una versión anterior del catálogo). Evita que el contador muestre
+   * piezas que no se pueden cotizar.
+   */
+  reconcileCart: (validKeys: ReadonlySet<string>) => void
   wishlist: readonly string[]
   toggleWishlist: (productId: string) => void
   isWishlisted: (productId: string) => boolean
@@ -123,6 +129,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => setCart([]), [])
 
+  const reconcileCart = useCallback((validKeys: ReadonlySet<string>) => {
+    setCart((prev) => {
+      const next = prev.filter((line) => validKeys.has(`${line.productId}::${line.color}`))
+      // Sin cambios se devuelve el MISMO array: evita un bucle de re-render.
+      return next.length === prev.length ? prev : next
+    })
+  }, [])
+
   const toggleWishlist = useCallback((productId: string) => {
     setWishlist((prev) =>
       prev.includes(productId)
@@ -146,6 +160,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateQuantity,
       removeFromCart,
       clearCart,
+      reconcileCart,
       wishlist,
       toggleWishlist,
       isWishlisted,
@@ -157,6 +172,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateQuantity,
       removeFromCart,
       clearCart,
+      reconcileCart,
       wishlist,
       toggleWishlist,
       isWishlisted,

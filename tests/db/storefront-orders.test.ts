@@ -117,6 +117,22 @@ if (url) {
       })
       assert.equal(quote.lines.length, 0, 'lo no publicado no entra en la cotización')
     })
+
+    it('un id con forma inválida (carrito antiguo) no rompe la cotización', async () => {
+      const seeded = await seedSellableVariant(4, 9_900)
+      const quote = await quoteCartFromDb({
+        lines: [
+          { productId: seeded.productId, color: 'Negro', quantity: 1 },
+          // Dato heredado de una versión anterior del catálogo: antes provocaba
+          // `22P02 invalid input syntax for type uuid` y rompía TODO el carrito.
+          { productId: 'aurora-frame', color: 'Beige', quantity: 2 },
+        ],
+      })
+
+      assert.equal(quote.lines.length, 1, 'la línea válida se conserva')
+      assert.equal(quote.lines[0]!.productId, seeded.productId)
+      assert.equal(quote.subtotal.amount, 9_900)
+    })
   })
 
   suite('pedido de la tienda: descuenta stock y deja ledger (D25)', () => {

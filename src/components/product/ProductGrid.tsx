@@ -8,7 +8,7 @@ import { ProductCard } from './ProductCard'
  */
 export function ProductGrid({ products }: { products: Product[] }) {
   return (
-    <ul className="grid grid-cols-2 md:grid-cols-4">
+    <ul className="grid grid-cols-2 gap-x-2 gap-y-4 md:grid-cols-4">
       {products.map((p) => (
         <li key={p.id} className="min-w-0">
           <ProductCard product={p} />

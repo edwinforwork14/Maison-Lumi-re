@@ -7,12 +7,15 @@ import {
 } from '@/lib/preloader'
 import { usePageReady } from '@/hooks/use-page-ready'
 import LOGO_URL from '@/assets/brand/logo.svg'
+/** Ala de mariposa (carpeta `public` del proyecto); el espejo forma la derecha. */
+import WING_URL from '@/public/Media ala de mariposa dorada.png'
 
 /**
- * Pantalla de carga (Plan 05 §6): overlay negro de marca con el logo en
- * blanco; al estar lista la página, se parte por la mitad vertical —las dos
- * mitades se separan mientras se desintegran (bandas + blur)— y cada mitad
- * del logo sale hacia su lado con la misma disolución (§6.3).
+ * Pantalla de carga (Plan 05 §6): overlay blanco de marca con una IMAGEN arriba
+ * y las letras «Maison Lumière» debajo. Al estar lista la página, la salida es
+ * escalonada y todo se parte por la mitad vertical (izquierda/derecha) en este
+ * orden: primero el fondo blanco, después la imagen y por último las letras.
+ * Cada capa se separa hacia su lado mientras se desintegra (bandas + blur, §6.3).
  *
  * Regla dura (§6.4): el preloader NUNCA atrapa al usuario.
  * - Tope absoluto `PRELOADER_HARD_STOP_MS`: se retira pase lo que pase.
@@ -115,7 +118,34 @@ export function Preloader() {
       <div aria-hidden className="preloader-half-left" />
       <div aria-hidden className="preloader-half-right" />
 
-      {/* Logo duplicado con recorte: cada mitad sale hacia su lado. */}
+      {/* Mariposa (arriba): el ala original a la IZQUIERDA y su espejo a la
+          DERECHA. Cada mitad del overlay replica la composición centrada y la
+          recorta a su lado, así el corte cae en el centro y las dos alas
+          encajan sin costuras. Sale DESPUÉS del fondo y ANTES de las letras. */}
+      <div className="preloader-image" aria-hidden>
+        <div className="preloader-image-half-left">
+          <div className="preloader-image-compose">
+            <img src={WING_URL} alt="" className="preloader-image-wing" />
+            <img
+              src={WING_URL}
+              alt=""
+              className="preloader-image-wing preloader-image-wing-mirror"
+            />
+          </div>
+        </div>
+        <div className="preloader-image-half-right">
+          <div className="preloader-image-compose">
+            <img src={WING_URL} alt="" className="preloader-image-wing" />
+            <img
+              src={WING_URL}
+              alt=""
+              className="preloader-image-wing preloader-image-wing-mirror"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Letras duplicadas con recorte: cada mitad sale hacia su lado al final. */}
       <div className="preloader-logo" aria-hidden>
         <div className="preloader-logo-half-left">
           <img src={LOGO_URL} alt="" className="h-10 w-auto" />
