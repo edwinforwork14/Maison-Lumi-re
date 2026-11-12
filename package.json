@@ -18,7 +18,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:reset-stock": "node --experimental-strip-types --env-file-if-exists=.env scripts/db-reset-stock.mjs"
+    "db:reset-stock": "node --experimental-strip-types --env-file-if-exists=.env scripts/db-reset-stock.mjs",
+    "vercel-build": "pnpm db:migrate && pnpm build"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.2",

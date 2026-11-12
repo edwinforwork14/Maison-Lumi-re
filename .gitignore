@@ -1,31 +1,6 @@
-# ─── Dependencias y artefactos de build ──────────────────────────────────────
 node_modules/
 dist/
-.output/
-.tanstack/
-# Gestor único: pnpm (mezclar npm y pnpm rompe el árbol de dependencias)
-package-lock.json
-
-# ─── Cobertura y resultados de pruebas ──────────────────────────────────────
-coverage/
-test-results/
-playwright-report/
-
-# ─── Entorno y secretos ─────────────────────────────────────────────────────
 .env
-.env.*
-!.env.example
-
-# ─── Sistema ────────────────────────────────────────────────────────────────
-*.log
+*.local
 .DS_Store
-
-# ─── Documentación de trabajo (no se versiona) ──────────────────────────────
-# Los planes de ejecución son documentos de trabajo internos.
-plan.md
-plans/
-
-# ─── Herramientas de agentes y skills ───────────────────────────────────────
-# Skills de asistencia (cross-border-ecommerce, react-best-practices, …)
-.claude/skills/
-.freebuff/
+*.log

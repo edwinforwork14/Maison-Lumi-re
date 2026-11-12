@@ -1,0 +1,21 @@
+# PostgreSQL database for Maison Lumiere
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: maison-db
+    environment:
+      POSTGRES_USER: maison
+      POSTGRES_PASSWORD: maison
+      POSTGRES_DB: maison_lumiere
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maison -d maison_lumiere"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

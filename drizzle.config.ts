@@ -17,7 +17,7 @@ const databaseUrl = process.env.DATABASE_URL ?? ''
 
 if (requiresConnection && databaseUrl.length === 0) {
   throw new Error(
-    `drizzle-kit ${command}: falta DATABASE_URL. Define la conexión de PostgreSQL, p. ej. DATABASE_URL=postgres://usuario:clave@localhost:5432/maison_lumiere`,
+    `drizzle-kit ${command}: falta DATABASE_URL. Ej: DATABASE_URL=postgres://postgres.<ref>:<pass>@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`,
   )
 }
 
