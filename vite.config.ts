@@ -3,6 +3,7 @@ import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
+import { nitro } from 'nitro/vite'
 
 export default defineConfig(({ mode }) => {
   // Carga .env y expone TODAS las variables a process.env (no solo VITE_)
@@ -15,6 +16,6 @@ export default defineConfig(({ mode }) => {
 
   return {
     server: { port: 3000 },
-    plugins: [tsconfigPaths(), tanstackStart(), tailwindcss(), viteReact()],
+    plugins: [tsconfigPaths(), tanstackStart(), nitro(), tailwindcss(), viteReact()],
   }
 })
