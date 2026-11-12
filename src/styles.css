@@ -462,7 +462,7 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  padding-bottom: 9rem;
+  padding-bottom: clamp(5rem, 18vh, 9rem);
   --loader-exit: -70%;
 }
 
@@ -485,9 +485,16 @@ body {
 }
 
 .preloader-image-wing {
-  width: 14rem;
-  max-width: 34vw;
+  width: 10rem;
+  max-width: 40vw;
   height: auto;
+}
+
+@media (max-width: 768px) {
+  .preloader-image-wing {
+    width: 7rem;
+    max-width: 45vw;
+  }
 }
 
 .preloader-image-wing-mirror {
@@ -495,7 +502,13 @@ body {
   /* Junta las alas: el ala espejada se solapa sobre la izquierda para que
      las dos se lean como una sola mariposa (ajustable; solape actual -6.24rem,
      un 20% más que los -5.2rem anteriores). */
-  margin-left: -6.24rem;
+  margin-left: -4.5rem;
+}
+
+@media (max-width: 768px) {
+  .preloader-image-wing-mirror {
+    margin-left: -3.2rem;
+  }
 }
 
 .preloader-logo-half-left,
@@ -504,7 +517,7 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  padding-top: 11rem;
+  padding-top: clamp(6rem, 22vh, 11rem);
   --loader-exit: -60%;
 }
 
@@ -539,9 +552,9 @@ body {
 
 .preloader-progress {
   position: absolute;
-  bottom: 3rem;
+  bottom: 5vh;
   left: 50%;
-  width: 8rem;
+  width: clamp(6rem, 40vw, 8rem);
   height: 1px;
   overflow: hidden;
   transform: translateX(-50%);
