@@ -54,32 +54,16 @@ export function Header({ categories, collections }: HeaderProps) {
             contenido no se mueve, así que no hay salto de layout. */}
         <div aria-hidden className="header-surface" />
         <div className="relative z-10 grid min-h-[3rem] grid-cols-[1fr_auto_1fr] items-center gap-2.5 px-5 py-[0.938rem] md:px-10">
-          {/* Zona izquierda: Menú + Buscar (texto + icono, §2.1) */}
-          <div className="flex items-center gap-5">
-            <button
-              type="button"
-              onMouseEnter={mega.open}
-              onClick={() => {
-                // El click conserva el modal fullscreen (decisión de producto);
-                // el dropdown se rige por hover y se cierra al pulsar.
-                mega.close()
-                setMenuOpen(true)
-              }}
-              aria-haspopup="true"
-              aria-expanded={mega.state.isOpen || menuOpen}
-              className="flex items-center gap-2 text-[13px] uppercase tracking-[0.2em] transition-colors hover:text-text-secondary"
-            >
+          <div className="hidden items-center gap-5 md:flex">
+            {/* Zona izquierda: Menú + Buscar (texto + icono, §2.1) - oculto en móvil */}
+            <div className="flex items-center gap-2 text-[13px] uppercase tracking-[0.2em] transition-colors hover:text-text-secondary">
               <Icon name="menu" size={18} />
               Menú
-            </button>
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 text-[13px] uppercase tracking-[0.2em] transition-colors hover:text-text-secondary"
-            >
+            </div>
+            <div className="flex items-center gap-2 text-[13px] uppercase tracking-[0.2em] transition-colors hover:text-text-secondary">
               <Icon name="search" size={18} />
               Buscar
-            </button>
+            </div>
           </div>
 
           {/* Centro: logo (PNG de la carpeta `public`). El archivo trae mucho
