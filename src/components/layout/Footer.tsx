@@ -127,7 +127,7 @@ export function Footer({ categories }: { readonly categories: readonly NavCatego
         </div>
 
         {/* 3. Grupos de enlaces (§2.15) */}
-        <nav className="mt-12 flex flex-wrap gap-x-10 gap-y-12">
+        <nav className="mt-12 grid grid-cols-2 gap-x-6 gap-y-10 md:flex md:flex-wrap md:gap-x-10 md:gap-y-12">
           <div>
             <p className="body-strong">Tienda</p>
             <ul className="mt-3 flex flex-col gap-1">

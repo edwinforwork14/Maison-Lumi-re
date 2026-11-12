@@ -22,7 +22,7 @@ export function PlpIsland({
 
   return (
     <div
-      className={`fixed inset-x-5 bottom-0 z-40 flex justify-center gap-2 pb-6 transition-transform duration-150 ${
+      className={`fixed inset-x-4 bottom-0 z-40 flex justify-center gap-2 pb-6 transition-transform duration-150 ${
         visible ? 'translate-y-0' : 'translate-y-full'
       }`}
     >

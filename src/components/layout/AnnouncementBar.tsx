@@ -54,7 +54,7 @@ export function AnnouncementBar({
       data-chrome="announcement"
       data-header-state={headerState}
       data-animation="fade-in"
-      className="relative border-b border-line bg-surface px-12 py-2 text-center transition-colors"
+      className="relative border-b border-line bg-surface px-4 md:px-12 py-2 text-center transition-colors"
     >
       {/* `key` reinicia la animación de fundido en cada rotación. */}
       <p key={index} className="body-text animate-fade-in text-text-secondary">

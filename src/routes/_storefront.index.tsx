@@ -83,15 +83,15 @@ function Home() {
               (que lo pinta encima por `z-40`) para el bleed; el degradado CLARO
               superior mantiene legible el texto oscuro de la cabecera. El
               contenido del hero sigue anclado abajo, así que nada queda oculto. */}
-      <section className="relative -mt-[var(--chrome-h)] overflow-hidden bg-subtle">
-        <picture>
-          <source media="(min-width: 1024px)" srcSet="https://picsum.photos/seed/maison-hero/2000/1125" />
-          <img
-            src="https://picsum.photos/seed/maison-hero/1200/1500"
-            alt=""
-            className="aspect-[4/5] w-full object-cover md:aspect-[4/5] lg:aspect-video"
-          />
-        </picture>
+        <div className="relative -mt-[var(--chrome-h)] overflow-hidden bg-subtle">
+          <picture>
+            <source media="(min-width: 1024px)" srcSet="https://picsum.photos/seed/maison-hero/2000/1125" />
+            <img
+              src="https://picsum.photos/seed/maison-hero/1200/1500"
+              alt=""
+              className="aspect-square md:aspect-[4/5] lg:aspect-video w-full object-cover"
+            />
+          </picture>
         <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-surface/85 via-surface/30 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-strong/50 via-transparent to-transparent" />
         <div className="absolute inset-x-0 bottom-0 px-6 pb-12 md:px-16 md:pb-16">

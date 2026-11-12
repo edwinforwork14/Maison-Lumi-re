@@ -53,7 +53,7 @@ export function Header({ categories, collections }: HeaderProps) {
         {/* Cortina blanca (Plan 05 §3.2): la única capa que se anima; el
             contenido no se mueve, así que no hay salto de layout. */}
         <div aria-hidden className="header-surface" />
-        <div className="relative z-10 grid min-h-[3.375rem] grid-cols-[1fr_auto_1fr] items-center gap-2.5 px-5 py-[0.938rem] md:px-10">
+        <div className="relative z-10 grid min-h-[3rem] grid-cols-[1fr_auto_1fr] items-center gap-2.5 px-5 py-[0.938rem] md:px-10">
           {/* Zona izquierda: Menú + Buscar (texto + icono, §2.1) */}
           <div className="flex items-center gap-5">
             <button
@@ -89,12 +89,12 @@ export function Header({ categories, collections }: HeaderProps) {
           <Link
             to="/"
             aria-label="Maison Lumière"
-            className="flex h-[1.55rem] items-center justify-center overflow-hidden transition-opacity hover:opacity-70"
+            className="flex h-[1.1rem] md:h-[1.55rem] items-center justify-center overflow-hidden transition-opacity hover:opacity-70"
           >
             <img
               src={HEADER_LOGO_URL}
               alt=""
-              className="h-[3.7rem] w-auto max-w-none"
+              className="h-[2.8rem] md:h-[3.7rem] w-auto max-w-none"
             />
           </Link>
 

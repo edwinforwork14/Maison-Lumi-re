@@ -235,7 +235,7 @@ function CheckoutPage() {
   }
 
   const inputCls = (field: keyof FormData) =>
-    `w-full border bg-transparent px-4 py-3 text-sm outline-none transition-colors placeholder:text-text-secondary focus:border-strong ${
+    `w-full border bg-transparent px-4 py-4 md:py-3 text-sm outline-none transition-colors placeholder:text-text-secondary focus:border-strong ${
       errors[field] ? 'border-gold' : 'border-line'
     }`
 
@@ -246,7 +246,7 @@ function CheckoutPage() {
       <form
         onSubmit={handleSubmit}
         noValidate
-        className="grid gap-12 lg:grid-cols-[1fr_380px]"
+        className="grid gap-8 md:gap-12 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_380px]"
       >
         <div className="space-y-12">
           {/* Contacto */}

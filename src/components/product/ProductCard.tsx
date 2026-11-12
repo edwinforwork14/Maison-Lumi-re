@@ -74,14 +74,14 @@ export function ProductCard({ product }: { product: Product }) {
       </Link>
 
       {(product.isNew || product.bestseller || soldOut) && (
-        <div className="absolute left-5 top-5 z-10 flex flex-col items-start gap-2">
+        <div className="absolute left-3 top-3 z-10 flex flex-col items-start gap-2 md:left-5 md:top-5">
           {soldOut && <Badge kind="out">Agotado</Badge>}
           {!soldOut && product.isNew && <Badge kind="new">Nuevo</Badge>}
           {!soldOut && product.bestseller && <Badge kind="bestseller">Bestseller</Badge>}
         </div>
       )}
 
-      <div className="flex flex-col gap-3 px-5 pb-8 pt-3 text-[13px]">
+      <div className="flex flex-col gap-3 px-3 pb-6 pt-3 text-[13px] md:px-5 md:pb-8">
         <Link
           to="/products/$slug"
           params={{ slug: product.slug }}
@@ -111,7 +111,7 @@ export function ProductCard({ product }: { product: Product }) {
           <button
             type="button"
             onClick={handleAdd}
-            className="self-start text-[13px] underline-offset-4 transition-colors duration-[250ms] hover:underline"
+            className="w-full sm:flex items-center justify-center self-start text-[13px] underline-offset-4 transition-colors duration-[250ms] hover:underline"
           >
             {added ? 'Añadido a tu cesta' : 'Añadir a la bolsa'}
           </button>
